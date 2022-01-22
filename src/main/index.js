@@ -488,6 +488,7 @@ function AutoPage() {
 let autoStockTime;
 
 function AutoStock() {
+    // debugger;
     let display_model = db.get('display_model');
     let display_shares_list = db.get('display_shares_list');
 
@@ -506,7 +507,6 @@ function AutoStock() {
 
 function updateText(text) {
     let curr_model = db.get('curr_model');
-
     if (curr_model === '1') {
         tray.setTitle(text);
     } else if (curr_model === '2') {
