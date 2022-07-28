@@ -3,6 +3,7 @@ var rp = require('request-promise');
 const request = require('superagent')
 require('superagent-charset')(request)
 // const url = 'http://hq.sinajs.cn/list=';
+//https://www.php.cn/blog/detail/24976.html
 const url = 'http://qt.gtimg.cn/r=0.8409869808238q=';
 const headers = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_3) AppleWebKit/537.36 (KHTML, like Gecko)' +
@@ -11,15 +12,15 @@ const headers = {
 
 export default {
     getData: function (code, callback) {
-
+        code = "sz002199";
         var codeArr = code.split(",");
         var that = this;
         // var textAll = "";
         var urlAll = url;
         codeArr.forEach(function (code) {
-            if (!code.startsWith("s_")) {
-                code = "s_" + code;
-            }
+            // if (!code.startsWith("s_")) {
+            //     code = "s_" + code;
+            // }
             urlAll = urlAll + code + ",";
         })
         // var responseArr = codeArr.map(code => {
@@ -52,19 +53,40 @@ export default {
             .charset("gbk")
             .then(function (res) {
                 let results = res.text;
-                console.log(results)
                 const resultsArray = results.split(";");
                 var textAll = "";
                 for (let i = 0; i < resultsArray.length - 1; i++) {
+
                     let result = resultsArray[i];
                     var arr = result.split("~")
                     console.log(arr)
                     var stockName = arr[1];
                     var stockCode = arr[2];
                     var currPrice = arr[3];
-                    var percentage = arr[5];
-                    var text = stockName + '  ' + currPrice + "/" + percentage + "%" + "\r\n";
+                    var percentage = arr[32];
+                    var priceBuyer1 = arr[9];
+                    var amountBuyer1 = arr[10];
+                    var amountBuyer1Total = priceBuyer1 * amountBuyer1 * 100;
+
+                    var param = {}
+                    var sizes = ['', '万', '亿'];
+                    var m;
+                    if(amountBuyer1Total < 10000){
+                        param.value =amountBuyer1Total
+                        param.unit=''
+                    }else{
+                        console.log("m:" + m);
+                        m = Math.floor(Math.log(amountBuyer1Total) / Math.log(10000));
+                        console.log("m:" + m);
+
+                        param.value = ((amountBuyer1Total / Math.pow(10000, m))).toFixed(2);
+                        param.unit = sizes[m];
+                    }
+                    // console.log("amountBuyer1Total: " + param.value + param.unit);
+
+                    var text = stockName + '  ' + currPrice + "/" + percentage + "%" + '  '+ param.value + param.unit + "\r\n";
                     textAll = textAll + text;
+                    console.log(textAll);
                 }
                 func(textAll)
             }).catch((err) => {
