@@ -68,17 +68,14 @@ export default {
                     var amountBuyer1Total = priceBuyer1 * amountBuyer1 * 100;
 
                     var param = {}
-                    var sizes = ['', '万', '亿'];
+                    var sizes = ['', 'W', 'Y'];
                     var m;
                     if(amountBuyer1Total < 10000){
                         param.value =amountBuyer1Total
                         param.unit=''
                     }else{
-                        console.log("m:" + m);
                         m = Math.floor(Math.log(amountBuyer1Total) / Math.log(10000));
-                        console.log("m:" + m);
-
-                        param.value = ((amountBuyer1Total / Math.pow(10000, m))).toFixed(2);
+                        param.value = ((amountBuyer1Total / Math.pow(10000, m))).toFixed(4);
                         param.unit = sizes[m];
                     }
                     // console.log("amountBuyer1Total: " + param.value + param.unit);
