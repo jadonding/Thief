@@ -12,7 +12,6 @@ const headers = {
 
 export default {
     getData: function (code, callback) {
-        code = "sz002199";
         var codeArr = code.split(",");
         var that = this;
         // var textAll = "";
