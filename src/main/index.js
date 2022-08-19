@@ -494,12 +494,11 @@ function AutoStock() {
 
     if (display_model === '2') {
         clearInterval(autoStockTime);
-        var second = db.get('second');
         autoStockTime = setInterval(function() {
             stock.getData(display_shares_list, function(text) {
                 updateText(text);
             })
-        }, parseInt(second) * 1000);
+        }, 500);
     } else {
         clearInterval(autoStockTime);
     }
