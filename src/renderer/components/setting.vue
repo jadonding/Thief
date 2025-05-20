@@ -351,7 +351,7 @@ export default {
   },
   methods: {
     addStockCode() {
-      this.stock_code.push("");
+      this.stock_code.push({ code: "", name: "" }); // 修改为对象数组
       this.stockDisplay.push("");
     },
     removeStockCode(index) {
@@ -509,8 +509,12 @@ export default {
 
       this.is_display_page = db.get("is_display_page");
 
-      this.stock_code = db.get("display_shares_list") || [];
-      this.stockDisplay = [...this.stock_code]; // 初始化显示股票名称或代码
+      const savedStocks = db.get("display_shares_list") || [];
+      this.stock_code = savedStocks.map(stock => ({
+        code: stock.code,
+        name: stock.name || stock.code // 如果没有名称，使用代码
+      }));
+      this.stockDisplay = this.stock_code.map(stock => stock.name || stock.code);
 
       this.moyu_text = db.get("moyu_text");
     },
@@ -547,7 +551,7 @@ export default {
 
       db.set("is_display_page", this.is_display_page);
 
-      db.set("display_shares_list", this.stock_code);
+      db.set("display_shares_list", this.stock_code); // 保存股票代码和名称
 
       db.set("moyu_text", this.moyu_text);
 
@@ -569,8 +573,8 @@ export default {
     },
 
     selectStock(stock) {
-      this.stock_code.push(stock.code);
-      this.stockDisplay.push(stock.name); // 显示股票名称
+      this.stock_code.push({ code: stock.code, name: stock.name }); // 保存代码和名称
+      this.stockDisplay.push(stock.name || stock.code); // 显示名称或代码
       this.stockSearchQuery = ""; // 清空搜索框
     },
 

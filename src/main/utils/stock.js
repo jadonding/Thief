@@ -65,10 +65,9 @@ export default {
     searchStocks(query) {
         const results = [];
         const lowerQuery = query.toLowerCase();
-
         console.log(this.stockCache);
         for (const [code, name] of Object.entries(this.stockCache)) {
-            if (code.toLowerCase().startsWith(lowerQuery) || name.toLowerCase().startsWith(lowerQuery)) {
+            if (code.toLowerCase().includes(lowerQuery) || name.toLowerCase().includes(lowerQuery)) {
                 results.push({ code, name });
             }
         }
@@ -94,17 +93,18 @@ export default {
         var that = this;
         // var textAll = "";
         var urlAll = url;
-        code.forEach(function (code) {
+        code.forEach(function (stockCode) {
+            var codeValue = stockCode.code;
             // if (!code.startsWith("s_")) {
             //     code = "s_" + code;
             // }
             // 根据股票代码添加sz，sh前缀
-            if (code.startsWith("6")) {
-                code = "sh" + code;
+            if (codeValue.startsWith("6")) {
+                codeValue = "sh" + codeValue;
             } else {
-                code = "sz" + code;
+                codeValue = "sz" + codeValue;
             }
-            urlAll = urlAll + code + ",";
+            urlAll = urlAll + codeValue + ",";
         })
         // var responseArr = codeArr.map(code => {
         //
