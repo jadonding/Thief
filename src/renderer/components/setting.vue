@@ -256,19 +256,33 @@
             <div v-for="(code, index) in stock_code" :key="index" style="align-items: center; margin-bottom: 5px;">
               <el-input
                 style="width:100px;"
-                v-model="stock_code[index]"
+                v-model="stockDisplay[index]"
                 size="mini"
-                placeholder="请输入股票代码"
-                prefix-icon="el-icon-sugar"
+                placeholder="请输入股票代码或名称"
               ></el-input>
               <el-button
                 type="danger"
                 size="mini"
-                icon="el-icon-minus"
+                icon="el-icon-delete"
                 @click="removeStockCode(index)"
                 style="margin-left: 6px;"
               ></el-button>
             </div>
+            <el-autocomplete
+              v-model="stockSearchQuery"
+              size="mini"
+              :fetch-suggestions="onStockSearch"
+              placeholder="输入股票名称或代码"
+              @select="selectStock"
+              style="width: 100px; margin-top: 5px;"
+            >
+              <template slot-scope="{ item }">
+                <div style="display: flex; justify-content: space-between;">
+                  <span>{{ item.name }}</span>
+                  <span>{{ item.code }}</span>
+                </div>
+              </template>
+            </el-autocomplete>
             <el-button
               type="primary"
               size="mini"
@@ -289,6 +303,7 @@ import db from "../../main/utils/db";
 import dialog from "../utils/dialog";
 import { ipcRenderer, shell } from "electron";
 import hotkeys from "hotkeys-js";
+import stockUtils from "../../main/utils/stock";
 
 export default {
   name: "setting",
@@ -314,27 +329,47 @@ export default {
       is_display_joke: false,
       is_display_shares: false,
       stock_code: [],
+      stockDisplay: [], // 用于显示股票名称或代码
       moyu_text: "",
-      keyPrevious: "CmdOrCtrl+Alt",
+      keyPrevious: "Alt",
       keyPreviousX: "",
-      keyNext: "CmdOrCtrl+Alt",
+      keyNext: "Alt",
       keyNextX: "",
-      keyBoss: "CmdOrCtrl+Alt",
+      keyBoss: "Alt",
       keyBossX: "",
-      keyAuto: "CmdOrCtrl+Alt",
-      keyAutoX: ""
+      keyAuto: "Alt",
+      keyAutoX: "",
+      stockSearchQuery: "",
+      selectedStock: null,
+      selectedStocks: [],
+      stockSearchResults: []
     };
   },
   created() {
     this.onLoad();
     this.onKey();
+    this.loadStockCodes();
+    this.loadCachedStockNames(); // 加载缓存的股票名称
   },
   methods: {
     addStockCode() {
       this.stock_code.push("");
+      this.stockDisplay.push("");
     },
     removeStockCode(index) {
       this.stock_code.splice(index, 1);
+      this.stockDisplay.splice(index, 1);
+    },
+    loadCachedStockNames() {
+      this.stock_code.forEach((code, index) => {
+        const cachedStock = db.get(`stock_cache_${code}`);
+        console.log("this.stockDisplay[index]", this.stockDisplay[index]);
+        if (cachedStock) {
+          this.$set(this.stockDisplay, index, cachedStock.name); // 使用缓存的股票名称
+        } else {
+          this.$set(this.stockDisplay, index, code); // 如果没有缓存，显示代码
+        }
+      });
     },
     onModel1() {
       if (this.is_display_joke) {
@@ -488,6 +523,7 @@ export default {
       this.is_display_page = db.get("is_display_page");
 
       this.stock_code = db.get("display_shares_list") || [];
+      this.stockDisplay = [...this.stock_code]; // 初始化显示股票名称或代码
 
       this.moyu_text = db.get("moyu_text");
     },
@@ -535,6 +571,27 @@ export default {
         type: "success",
         showClose: true
       });
+    },
+    async loadStockCodes() {
+      console.log("Loading stock codes...");
+      await stockUtils.fetchAllStockCodes();
+    },
+    async onStockSearch(queryString, cb) {
+      if (!queryString.trim()) {
+        cb([]);
+        return;
+      }
+      const results = stockUtils.searchStocks(queryString);
+      cb(results.map(stock => ({ name: stock.name, code: stock.code })));
+    },
+
+    selectStock(stock) {
+      this.stock_code.push(stock.code);
+      this.stockDisplay.push(stock.name); // 显示股票名称
+      this.stockSearchQuery = ""; // 清空搜索框
+    },
+
+    onStockSelect(stocks) {
     }
   }
 };

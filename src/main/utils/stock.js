@@ -10,7 +10,71 @@ const headers = {
         ' Chrome/74.0.3729.169 Safari/537.36',
 }
 
+
+const STOCK_API_URL = 'https://jay.tohours.com/miniprogram/api/external/stock/query-code';
+
 export default {
+    stockCache: {},
+
+    async fetchAllStockCodes() {
+        let pageNo = 1;
+        const pageSize = 100;
+        let hasMore = true;
+
+        while (hasMore) {
+            try {
+                const response = await request
+                    .get(STOCK_API_URL)
+                    .query({ pageNo, pageSize });
+
+                const data = response.body;
+                console.log("Fetched data for page", pageNo, ":", data);
+                if (data && data.resData && data.resData.records && data.resData.records.length > 0) {
+                    console.log("Fetched stock codes:", data.resData.records);
+                    data.resData.records.forEach(stock => {
+                        this.stockCache[stock.code] = stock.name;
+                    });
+
+                    hasMore = data.resData.records.length === pageSize;
+                    pageNo++;
+                } else {
+                    hasMore = false;
+                }
+            } catch (error) {
+                console.error('Error fetching stock codes:', error);
+                hasMore = false;
+            }
+        }
+        console.log("Final stockCache:", this.stockCache);
+    },
+
+    searchStocks(query) {
+        const results = [];
+        const lowerQuery = query.toLowerCase();
+
+        console.log(this.stockCache);
+        for (const [code, name] of Object.entries(this.stockCache)) {
+            if (code.toLowerCase().startsWith(lowerQuery) || name.toLowerCase().startsWith(lowerQuery)) {
+                results.push({ code, name });
+            }
+        }
+
+        return results;
+    },
+
+    searchStockByCodeOrName(query) {
+        const results = [];
+        const lowerQuery = query.toLowerCase();
+
+        for (const [code, name] of Object.entries(this.stockCache)) {
+            if (code.toLowerCase().startsWith(lowerQuery) || name.toLowerCase().startsWith(lowerQuery)) {
+                results.push({ code, name });
+            }
+        }
+
+        return results;
+    },
+
     getData: function (code, callback) {
         // var codeArr = code.split(",");
         var that = this;
@@ -20,6 +84,12 @@ export default {
             // if (!code.startsWith("s_")) {
             //     code = "s_" + code;
             // }
+            // 根据股票代码添加sz，sh前缀
+            if (code.startsWith("6")) {
+                code = "sh" + code;
+            } else {
+                code = "sz" + code;
+            }
             urlAll = urlAll + code + ",";
         })
         // var responseArr = codeArr.map(code => {
