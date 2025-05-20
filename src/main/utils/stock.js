@@ -45,7 +45,8 @@ export default {
                 if (data && data.resData && data.resData.records && data.resData.records.length > 0) {
                     console.log("Fetched stock codes:", data.resData.records);
                     data.resData.records.forEach(stock => {
-                        this.stockCache[stock.code] = stock.name;
+                        // stock.name去掉两端和中间的空格
+                        this.stockCache[stock.code] = stock.name.replace(/\s+/g, '');
                     });
 
                     hasMore = data.resData.records.length === pageSize;
