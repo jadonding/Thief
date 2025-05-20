@@ -348,8 +348,6 @@ export default {
   created() {
     this.onLoad();
     this.onKey();
-    this.loadStockCodes();
-    this.loadCachedStockNames(); // 加载缓存的股票名称
   },
   methods: {
     addStockCode() {
@@ -359,17 +357,6 @@ export default {
     removeStockCode(index) {
       this.stock_code.splice(index, 1);
       this.stockDisplay.splice(index, 1);
-    },
-    loadCachedStockNames() {
-      this.stock_code.forEach((code, index) => {
-        const cachedStock = db.get(`stock_cache_${code}`);
-        console.log("this.stockDisplay[index]", this.stockDisplay[index]);
-        if (cachedStock) {
-          this.$set(this.stockDisplay, index, cachedStock.name); // 使用缓存的股票名称
-        } else {
-          this.$set(this.stockDisplay, index, code); // 如果没有缓存，显示代码
-        }
-      });
     },
     onModel1() {
       if (this.is_display_joke) {
@@ -571,10 +558,6 @@ export default {
         type: "success",
         showClose: true
       });
-    },
-    async loadStockCodes() {
-      console.log("Loading stock codes...");
-      await stockUtils.fetchAllStockCodes();
     },
     async onStockSearch(queryString, cb) {
       if (!queryString.trim()) {

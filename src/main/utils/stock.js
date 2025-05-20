@@ -15,8 +15,21 @@ const STOCK_API_URL = 'https://jay.tohours.com/miniprogram/api/external/stock/qu
 
 export default {
     stockCache: {},
+    isStockCacheInitialized: false, // 添加标志位
+
+    async initializeStockCache() {
+        if (!this.isStockCacheInitialized) {
+            await this.fetchAllStockCodes();
+            this.isStockCacheInitialized = true; // 设置标志位为已初始化
+        }
+    },
 
     async fetchAllStockCodes() {
+        if (this.isStockCacheInitialized) {
+            console.log("Stock cache already initialized, skipping fetch.");
+            return;
+        } // 如果已初始化，直接返回
+
         let pageNo = 1;
         const pageSize = 100;
         let hasMore = true;
@@ -141,7 +154,8 @@ export default {
                     var sizes = ['', 'W', 'Y'];
                     var m;
                     if(amountBuyer1Total < 10000){
-                        param.value =amountBuyer1Total
+                        // 保留2位小数
+                        param.value = amountBuyer1Total.toFixed(2);
                         param.unit=''
                     }else{
                         m = Math.floor(Math.log(amountBuyer1Total) / Math.log(10000));
@@ -184,3 +198,9 @@ export default {
         //     })
     }
 };
+
+// 在程序启动时调用 initializeStockCache
+(async () => {
+    const stockUtils = require('./stock').default;
+    await stockUtils.initializeStockCache();
+})();
