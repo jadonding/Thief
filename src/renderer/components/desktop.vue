@@ -1,7 +1,7 @@
 <template>
   <el-container class="container" :style="color">
     <div class="text boss" v-if="is_boss">
-      <span>{{text}}</span>
+      <span v-html="text"></span>
     </div>
     <div v-else>
       <div
@@ -12,9 +12,9 @@
         @mouseout="onMouse(4)"
         @dbclick.prevent="onMouse(5)"
         v-show="is_mouse_model=='1'"
-      >{{text}}</div>
+        v-html="text"></div>
 
-      <div :class="display_css" v-show="is_mouse_model=='0'">{{text}}</div>
+      <div :class="display_css" v-show="is_mouse_model=='0'" v-html="text"></div>
     </div>
   </el-container>
 </template>
@@ -46,13 +46,15 @@ export default {
     });
 
     ipcRenderer.on("text", function(event, message) {
+      const raw = remote.getGlobal("text").text;
+      // convert newlines to HTML line breaks
+      const htmlText = String(raw).replace(/(?:\r\n|\r|\n)/g, '<br/>');
       if (message === "boss") {
         that.is_boss = true;
-        that.text = remote.getGlobal("text").text;
       } else {
         that.is_boss = false;
-        that.text = remote.getGlobal("text").text;
       }
+      that.text = htmlText;
 
       var display_model = db.get("display_model");
       if (display_model == "1") {

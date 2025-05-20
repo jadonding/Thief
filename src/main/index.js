@@ -310,7 +310,7 @@ function createWindownSetting() {
     settingWindow = new BrowserWindow({
         title: '设 置',
         useContentSize: true,
-        width: 715,
+        width: 780,
         height: 630,
         resizable: false,
         maximizable: false,

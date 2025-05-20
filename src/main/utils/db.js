@@ -78,19 +78,19 @@ export default {
         }
 
         if (!this.db_util.has('key_next').value()) {
-            this.db_util.set('key_next', "CmdOrCtrl+Alt+.").write()
+            this.db_util.set('key_next', "Alt+2").write()
         }
 
         if (!this.db_util.has('key_previous').value()) {
-            this.db_util.set('key_previous', "CmdOrCtrl+Alt+,").write()
+            this.db_util.set('key_previous', "Alt+1").write()
         }
 
         if (!this.db_util.has('key_boss').value()) {
-            this.db_util.set('key_boss', "CmdOrCtrl+Alt+M").write()
+            this.db_util.set('key_boss', "Alt+3").write()
         }
 
         if (!this.db_util.has('key_auto').value()) {
-            this.db_util.set('key_auto', "CmdOrCtrl+Alt+P").write()
+            this.db_util.set('key_auto', "Alt+P").write()
         }
 
         if (!this.db_util.has('errCodeChecked').value()) {

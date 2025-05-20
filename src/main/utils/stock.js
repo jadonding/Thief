@@ -12,11 +12,11 @@ const headers = {
 
 export default {
     getData: function (code, callback) {
-        var codeArr = code.split(",");
+        // var codeArr = code.split(",");
         var that = this;
         // var textAll = "";
         var urlAll = url;
-        codeArr.forEach(function (code) {
+        code.forEach(function (code) {
             // if (!code.startsWith("s_")) {
             //     code = "s_" + code;
             // }
@@ -80,7 +80,7 @@ export default {
                     }
                     // console.log("amountBuyer1Total: " + param.value + param.unit);
 
-                    var text = stockName + '  ' + currPrice + "/" + percentage + "%" + '  '+ param.value + param.unit + "\r\n";
+                    var text = stockName + '  ' + currPrice + "/" + percentage + "%" + '  '+ param.value + param.unit + "\n";
                     textAll = textAll + text;
                     console.log(textAll);
                 }
