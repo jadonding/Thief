@@ -95,17 +95,19 @@ export default {
         var urlAll = url;
         code.forEach(function (stockCode) {
             var codeValue = stockCode.code;
+            console.log("codeValue: " + codeValue);
             // if (!code.startsWith("s_")) {
             //     code = "s_" + code;
             // }
             // 根据股票代码添加sz，sh前缀
             if (codeValue.startsWith("6")) {
                 codeValue = "sh" + codeValue;
-            } else {
+            } else if (codeValue.startsWith("0")) {
                 codeValue = "sz" + codeValue;
             }
             urlAll = urlAll + codeValue + ",";
         })
+        console.log("urlAll: " + urlAll);
         // var responseArr = codeArr.map(code => {
         //
         //     return url + code

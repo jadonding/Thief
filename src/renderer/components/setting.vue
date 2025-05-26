@@ -253,12 +253,13 @@
             ></el-input>
           </el-form-item>
           <el-form-item label="股票代码">
-            <div v-for="(code, index) in stock_code" :key="index" style="align-items: center; margin-bottom: 5px;">
+            <div v-for="(codeObj, index) in stock_code" :key="index" style="align-items: center; margin-bottom: 5px;">
               <el-input
                 style="width:100px;"
                 v-model="stockDisplay[index]"
                 size="mini"
-                placeholder="请输入股票代码或名称"
+                placeholder="代码/名称"
+                @blur="updateStockCodeFromInput(index)"
               ></el-input>
               <el-button
                 type="danger"
@@ -328,8 +329,8 @@ export default {
       is_display_page: true,
       is_display_joke: false,
       is_display_shares: false,
-      stock_code: [],
-      stockDisplay: [], // 用于显示股票名称或代码
+      stock_code: [], // 存储 { code: string, name: string }
+      stockDisplay: [], // 用于 v-model，显示名称或代码
       moyu_text: "",
       keyPrevious: "Alt",
       keyPreviousX: "",
@@ -350,8 +351,57 @@ export default {
     this.onKey();
   },
   methods: {
+    updateStockCodeFromInput(index) {
+      const inputValue = this.stockDisplay[index] ? this.stockDisplay[index].trim() : "";
+
+      // 确保 stock_code[index] 存在且为对象
+      if (!this.stock_code[index] || typeof this.stock_code[index] !== 'object') {
+        this.$set(this.stock_code, index, { code: "", name: "" });
+      }
+
+      if (!inputValue) {
+        // 如果输入被清空，也清空对应的 stock_code 条目
+        this.stock_code[index].code = "";
+        this.stock_code[index].name = "";
+        // stockDisplay[index] 已经通过 v-model 更新为空
+        return;
+      }
+
+      const results = stockUtils.searchStocks(inputValue);
+      let matchedStock = null;
+
+      if (results && results.length > 0) {
+        // 1. 尝试精确代码匹配
+        matchedStock = results.find(s => s.code === inputValue);
+        // 2. 如果无精确代码匹配，尝试精确名称匹配
+        if (!matchedStock) {
+          matchedStock = results.find(s => s.name === inputValue);
+        }
+        // 3. 如果仍然没有匹配，且搜索结果只有一个，则使用该结果
+        if (!matchedStock && results.length === 1) {
+          matchedStock = results[0];
+        }
+      }
+
+      if (matchedStock) {
+        this.stock_code[index].code = matchedStock.code;
+        this.stock_code[index].name = matchedStock.name;
+        this.$set(this.stockDisplay, index, matchedStock.name || matchedStock.code); // 更新显示为名称或代码
+      } else {
+        // 未找到明确匹配项，将输入视为代码
+        this.stock_code[index].code = inputValue;
+        // 根据输入格式判断是代码还是名称，相应设置 name 字段
+        if (/^[0-9]{6}$/.test(inputValue) || /^(sh|sz|bj)[0-9]{6}$/i.test(inputValue)) {
+          this.stock_code[index].name = ""; // 是代码格式，name 可空或尝试异步获取
+        } else {
+          this.stock_code[index].name = inputValue; // 不是标准代码格式，视为名称
+        }
+        // stockDisplay[index] 保持用户输入的值 (v-model 已处理)
+        this.$set(this.stockDisplay, index, inputValue);
+      }
+    },
     addStockCode() {
-      this.stock_code.push({ code: "", name: "" }); // 修改为对象数组
+      this.stock_code.push({ code: "", name: "" });
       this.stockDisplay.push("");
     },
     removeStockCode(index) {
@@ -512,9 +562,9 @@ export default {
       const savedStocks = db.get("display_shares_list") || [];
       this.stock_code = savedStocks.map(stock => ({
         code: stock.code,
-        name: stock.name || stock.code // 如果没有名称，使用代码
+        name: stock.name || "" // 确保 name 存在，即使是空字符串
       }));
-      this.stockDisplay = this.stock_code.map(stock => stock.name || stock.code);
+      this.stockDisplay = this.stock_code.map(stock => stock.name || stock.code); // 优先显示名称
 
       this.moyu_text = db.get("moyu_text");
     },
@@ -569,12 +619,27 @@ export default {
         return;
       }
       const results = stockUtils.searchStocks(queryString);
-      cb(results.map(stock => ({ name: stock.name, code: stock.code })));
+      cb(results.map(stock => ({ value: stock.name + " (" + stock.code + ")", name: stock.name, code: stock.code }))); // 修改cb的返回格式以适应el-autocomplete的显示
     },
 
-    selectStock(stock) {
-      this.stock_code.push({ code: stock.code, name: stock.name }); // 保存代码和名称
-      this.stockDisplay.push(stock.name || stock.code); // 显示名称或代码
+    selectStock(stock) { // stock is { value: "...", name: "...", code: "..." }
+      // 检查股票代码是否已存在
+      const existingStockIndex = this.stock_code.findIndex(s => s.code === stock.code);
+
+      if (existingStockIndex === -1) {
+        // 不存在则添加到列表末尾
+        this.stock_code.push({ code: stock.code, name: stock.name });
+        this.stockDisplay.push(stock.name || stock.code);
+      } else {
+        // 如果已存在，更新其名称，并更新显示
+        this.stock_code[existingStockIndex].name = stock.name;
+        this.$set(this.stockDisplay, existingStockIndex, stock.name || stock.code);
+        this.$message({
+          message: `股票 ${stock.code} 已在列表中，信息已更新。`,
+          type: "info",
+          showClose: true
+        });
+      }
       this.stockSearchQuery = ""; // 清空搜索框
     },
 
