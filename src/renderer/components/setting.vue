@@ -4,21 +4,11 @@
       <div style="width:500px;">
         <el-form style="width:500px;" ref="form" :model="form" label-width="100px">
           <el-form-item label="小说路径">
-            <el-input
-              style="width:80.5%;margin-top: 7px;"
-              v-model="form.file_path"
-              size="mini"
-              placeholder="请选择小说路径"
-              prefix-icon="el-icon-tickets"
-            >
+            <el-input style="width:80.5%;margin-top: 7px;" v-model="form.file_path" size="mini" placeholder="请选择小说路径"
+              prefix-icon="el-icon-tickets">
               <template slot="prepend">
-                <el-checkbox
-                  :border="true"
-                  size="mini"
-                  id="lm"
-                  v-model="form.errCodeChecked"
-                  :checked="lmchecked"
-                >乱码</el-checkbox>
+                <el-checkbox :border="true" size="mini" id="lm" v-model="form.errCodeChecked"
+                  :checked="lmchecked">乱码</el-checkbox>
               </template>
             </el-input>
             <el-button type="primary" size="mini" @click="openTxt">
@@ -28,33 +18,18 @@
 
           <el-col :span="12">
             <el-form-item label="当前页数">
-              <el-input-number
-                size="mini"
-                controls-position="right"
-                :min="1"
-                :max="999999999"
-                v-model="form.curr_page"
-              ></el-input-number>
+              <el-input-number size="mini" controls-position="right" :min="1" :max="999999999"
+                v-model="form.curr_page"></el-input-number>
             </el-form-item>
           </el-col>
 
           <el-col :span="12">
             <el-form-item label="每页数量">
-              <el-input-number
-                v-if="form.curr_model=='1'"
-                size="mini"
-                controls-position="right"
-                :min="5"
-                v-model="form.page_size"
-              ></el-input-number>
+              <el-input-number v-if="form.curr_model == '1'" size="mini" controls-position="right" :min="5"
+                v-model="form.page_size"></el-input-number>
 
-              <el-input-number
-                v-else
-                size="mini"
-                controls-position="right"
-                :min="5"
-                v-model="form.page_size"
-              ></el-input-number>
+              <el-input-number v-else size="mini" controls-position="right" :min="5"
+                v-model="form.page_size"></el-input-number>
             </el-form-item>
           </el-col>
 
@@ -66,38 +41,22 @@
 
           <el-col :span="12">
             <el-form-item label="换行符号">
-              <el-input
-                style="width:111px;"
-                v-model="form.line_break"
-                maxlength="5"
-                size="mini"
-                placeholder="换行符号"
-                prefix-icon="el-icon-sugar"
-              ></el-input>
+              <el-input style="width:111px;" v-model="form.line_break" maxlength="5" size="mini" placeholder="换行符号"
+                prefix-icon="el-icon-sugar"></el-input>
             </el-form-item>
           </el-col>
 
           <el-col :span="12">
             <el-form-item label="字体大小">
-              <el-input-number
-                size="mini"
-                controls-position="right"
-                :min="12"
-                :max="100"
-                v-model="form.font_size"
-              ></el-input-number>
+              <el-input-number size="mini" controls-position="right" :min="12" :max="100"
+                v-model="form.font_size"></el-input-number>
             </el-form-item>
           </el-col>
 
           <el-col :span="12">
             <el-form-item label="自动翻页(秒)">
-              <el-input-number
-                size="mini"
-                controls-position="right"
-                :min="1"
-                :max="60"
-                v-model="form.second"
-              ></el-input-number>
+              <el-input-number size="mini" controls-position="right" :min="1" :max="60"
+                v-model="form.second"></el-input-number>
             </el-form-item>
           </el-col>
 
@@ -129,16 +88,9 @@
 
           <el-col :span="10">
             <el-form-item>
-              <el-input
-                style="width:179px;margin-left: -100px;"
-                v-model="keyPreviousX"
-                maxlength="100"
-                size="mini"
-                placeholder="请输入按键"
-                prefix-icon="el-icon-grape"
-                @focus="onPreviousFocus"
-                @blur="onPreviousBlur"
-              ></el-input>
+              <el-input style="width:179px;margin-left: -100px;" v-model="keyPreviousX" maxlength="100" size="mini"
+                placeholder="请输入按键" prefix-icon="el-icon-grape" @focus="onPreviousFocus"
+                @blur="onPreviousBlur"></el-input>
             </el-form-item>
           </el-col>
 
@@ -158,16 +110,8 @@
 
           <el-col :span="10">
             <el-form-item>
-              <el-input
-                style="width:179px;margin-left: -100px;"
-                v-model="keyNextX"
-                maxlength="100"
-                size="mini"
-                placeholder="请输入按键"
-                prefix-icon="el-icon-grape"
-                @focus="onNextFocus"
-                @blur="onNextBlur"
-              ></el-input>
+              <el-input style="width:179px;margin-left: -100px;" v-model="keyNextX" maxlength="100" size="mini"
+                placeholder="请输入按键" prefix-icon="el-icon-grape" @focus="onNextFocus" @blur="onNextBlur"></el-input>
             </el-form-item>
           </el-col>
 
@@ -187,16 +131,8 @@
 
           <el-col :span="10">
             <el-form-item>
-              <el-input
-                style="width:179px;margin-left: -100px;"
-                v-model="keyBossX"
-                maxlength="100"
-                size="mini"
-                placeholder="请输入按键"
-                prefix-icon="el-icon-grape"
-                @focus="onBossFocus"
-                @blur="onBossBlur"
-              ></el-input>
+              <el-input style="width:179px;margin-left: -100px;" v-model="keyBossX" maxlength="100" size="mini"
+                placeholder="请输入按键" prefix-icon="el-icon-grape" @focus="onBossFocus" @blur="onBossBlur"></el-input>
             </el-form-item>
           </el-col>
 
@@ -216,16 +152,8 @@
 
           <el-col :span="10">
             <el-form-item>
-              <el-input
-                style="width:179px;margin-left: -100px;"
-                v-model="keyAutoX"
-                maxlength="100"
-                size="mini"
-                placeholder="请输入按键"
-                prefix-icon="el-icon-grape"
-                @focus="onAutoFocus"
-                @blur="onAutoBlur"
-              ></el-input>
+              <el-input style="width:179px;margin-left: -100px;" v-model="keyAutoX" maxlength="100" size="mini"
+                placeholder="请输入按键" prefix-icon="el-icon-grape" @focus="onAutoFocus" @blur="onAutoBlur"></el-input>
             </el-form-item>
           </el-col>
 
@@ -243,40 +171,17 @@
             <el-switch v-model="is_display_page"></el-switch>
           </el-form-item>
           <el-form-item label="摸鱼文字">
-            <el-input
-                style="width:130px;"
-                v-model="moyu_text"
-                maxlength="100"
-                size="mini"
-                placeholder="请输入摸鱼文字"
-                prefix-icon="el-icon-umbrella"
-            ></el-input>
-          </el-form-item>
-          <el-form-item label="股票代码">
+            <el-input style="width:130px;" v-model="moyu_text" maxlength="100" size="mini" placeholder="请输入摸鱼文字"
+              prefix-icon="el-icon-umbrella"></el-input>
+          </el-form-item> <el-form-item label="股票代码">
             <div v-for="(codeObj, index) in stock_code" :key="index" style="align-items: center; margin-bottom: 5px;">
-              <el-input
-                style="width:100px;"
-                v-model="stockDisplay[index]"
-                size="mini"
-                placeholder="代码/名称"
-                @blur="updateStockCodeFromInput(index)"
-              ></el-input>
-              <el-button
-                type="danger"
-                size="mini"
-                icon="el-icon-delete"
-                @click="removeStockCode(index)"
-                style="margin-left: 6px;"
-              ></el-button>
+              <el-input style="width:100px;" v-model="stockDisplay[index]" size="mini" placeholder="代码/名称"
+                @blur="updateStockCodeFromInput(index)"></el-input>
+              <el-button type="danger" size="mini" icon="el-icon-delete" @click="removeStockCode(index)"
+                style="margin-left: 6px;"></el-button>
             </div>
-            <el-autocomplete
-              v-model="stockSearchQuery"
-              size="mini"
-              :fetch-suggestions="onStockSearch"
-              placeholder="输入股票名称或代码"
-              @select="selectStock"
-              style="width: 100px; margin-top: 5px;"
-            >
+            <el-autocomplete v-model="stockSearchQuery" size="mini" :fetch-suggestions="onStockSearch"
+              placeholder="输入股票名称或代码" @select="selectStock" style="width: 100px; margin-top: 5px;">
               <template slot-scope="{ item }">
                 <div style="display: flex; justify-content: space-between;">
                   <span>{{ item.name }}</span>
@@ -284,13 +189,30 @@
                 </div>
               </template>
             </el-autocomplete>
-            <el-button
-              type="primary"
-              size="mini"
-              icon="el-icon-plus"
-              @click="addStockCode"
-              style="margin-top: 5px;"
-            >添加股票代码</el-button>
+            <el-button type="primary" size="mini" icon="el-icon-plus" @click="addStockCode"
+              style="margin-top: 5px;">添加股票代码</el-button>
+          </el-form-item>
+
+          <!-- 涨停告警配置 -->
+          <el-form-item label="涨停告警">
+            <el-switch v-model="limit_up_alert_enabled"></el-switch>
+          </el-form-item>
+
+          <el-form-item label="钉钉Webhook" v-if="limit_up_alert_enabled">
+            <el-input style="width:200px;" v-model="dingtalk_webhook" size="mini" placeholder="钉钉机器人Webhook地址"
+              prefix-icon="el-icon-link"></el-input>
+          </el-form-item>
+
+          <el-form-item label="@用户手机号" v-if="limit_up_alert_enabled">
+            <div v-for="(phone, index) in at_phone_numbers" :key="index"
+              style="align-items: center; margin-bottom: 5px;">
+              <el-input style="width:130px;" v-model="at_phone_numbers[index]" size="mini" placeholder="手机号"
+                maxlength="11"></el-input>
+              <el-button type="danger" size="mini" icon="el-icon-delete" @click="removePhoneNumber(index)"
+                style="margin-left: 6px;"></el-button>
+            </div>
+            <el-button type="primary" size="mini" icon="el-icon-plus" @click="addPhoneNumber"
+              style="margin-top: 5px;">添加手机号</el-button>
           </el-form-item>
 
         </el-form>
@@ -307,8 +229,7 @@ import hotkeys from "hotkeys-js";
 import stockUtils from "../../main/utils/stock";
 
 export default {
-  name: "setting",
-  data() {
+  name: "setting", data() {
     return {
       form: {
         file_path: "",
@@ -343,7 +264,11 @@ export default {
       stockSearchQuery: "",
       selectedStock: null,
       selectedStocks: [],
-      stockSearchResults: []
+      stockSearchResults: [],
+      // 涨停告警相关
+      limit_up_alert_enabled: false,
+      dingtalk_webhook: "",
+      at_phone_numbers: []
     };
   },
   created() {
@@ -408,6 +333,12 @@ export default {
       this.stock_code.splice(index, 1);
       this.stockDisplay.splice(index, 1);
     },
+    addPhoneNumber() {
+      this.at_phone_numbers.push("");
+    },
+    removePhoneNumber(index) {
+      this.at_phone_numbers.splice(index, 1);
+    },
     onModel1() {
       if (this.is_display_joke) {
         this.is_display_shares = false;
@@ -452,11 +383,11 @@ export default {
     onKey() {
       var that = this;
 
-      hotkeys.filter = function(event) {
+      hotkeys.filter = function (event) {
         return true;
       };
 
-      hotkeys("*", function(e) {
+      hotkeys("*", function (e) {
         if (
           e.key != "Control" &&
           e.key != "Meta" &&
@@ -479,7 +410,7 @@ export default {
             keyx = "Down";
           } else if (e.key === "ArrowRight") {
             keyx = "Right";
-          }else if (e.key.trim() === "") {
+          } else if (e.key.trim() === "") {
             keyx = "不能为空格,请删掉重新输入";
           }
 
@@ -563,14 +494,18 @@ export default {
       this.stock_code = savedStocks.map(stock => ({
         code: stock.code,
         name: stock.name || "" // 确保 name 存在，即使是空字符串
-      }));
-      this.stockDisplay = this.stock_code.map(stock => stock.name || stock.code); // 优先显示名称
+      })); this.stockDisplay = this.stock_code.map(stock => stock.name || stock.code); // 优先显示名称
 
       this.moyu_text = db.get("moyu_text");
+
+      // 加载涨停告警配置
+      this.limit_up_alert_enabled = db.get("limit_up_alert_enabled") || false;
+      this.dingtalk_webhook = db.get("dingtalk_webhook") || "";
+      this.at_phone_numbers = db.get("at_phone_numbers") || [];
     },
     openTxt() {
       var that = this;
-      dialog.showOpenFile(function(e) {
+      dialog.showOpenFile(function (e) {
         that.form.file_path = e[0];
       });
     },
@@ -599,11 +534,14 @@ export default {
 
       db.set("errCodeChecked", this.form.errCodeChecked);
 
-      db.set("is_display_page", this.is_display_page);
-
-      db.set("display_shares_list", this.stock_code); // 保存股票代码和名称
+      db.set("is_display_page", this.is_display_page); db.set("display_shares_list", this.stock_code); // 保存股票代码和名称
 
       db.set("moyu_text", this.moyu_text);
+
+      // 保存涨停告警配置
+      db.set("limit_up_alert_enabled", this.limit_up_alert_enabled);
+      db.set("dingtalk_webhook", this.dingtalk_webhook);
+      db.set("at_phone_numbers", this.at_phone_numbers);
 
       ipcRenderer.send("bg_text_color", "ping");
 
@@ -716,6 +654,7 @@ export default {
 #lm {
   margin-left: -17px;
   margin-right: -17px;
+
   .el-checkbox__label {
     display: inline-block;
     padding-left: 10px;

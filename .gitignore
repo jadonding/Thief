@@ -12,3 +12,5 @@ thumbs.db
 yarn.lock
 yarn-error.log
 /build/
+/.idea
+/package-lock.json

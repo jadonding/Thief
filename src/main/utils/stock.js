@@ -151,9 +151,7 @@ export default {
                     var percentage = arr[32];
                     var priceBuyer1 = arr[9];
                     var amountBuyer1 = arr[10];
-                    var amountBuyer1Total = priceBuyer1 * amountBuyer1 * 100;
-
-                    var param = {}
+                    var amountBuyer1Total = priceBuyer1 * amountBuyer1 * 100;                    var param = {}
                     var sizes = ['', 'W', 'Y'];
                     var m;
                     if(amountBuyer1Total < 10000){
@@ -166,6 +164,16 @@ export default {
                         param.unit = sizes[m];
                     }
                     // console.log("amountBuyer1Total: " + param.value + param.unit);
+
+                    // 将封单金额转换为万元
+                    var sealAmountInWan = 0;
+                    if (param.unit === 'Y') {
+                        sealAmountInWan = parseFloat(param.value) * 10000;
+                    } else if (param.unit === 'W') {
+                        sealAmountInWan = parseFloat(param.value);
+                    } else {
+                        sealAmountInWan = parseFloat(param.value) / 10000;
+                    }
 
                     var text = stockName + '  ' + currPrice + "/" + percentage + "%" + '  '+ param.value + param.unit + "\n";
                     textAll = textAll + text;

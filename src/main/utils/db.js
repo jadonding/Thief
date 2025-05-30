@@ -127,10 +127,21 @@ export default {
 
         if (!this.db_util.has('desktop_wz').value()) {
             this.db_util.set('desktop_wz', "").write()
+        }        if (!this.db_util.has('is_ad').value()) {
+            this.db_util.set('is_ad', 0).write()
         }
 
-        if (!this.db_util.has('is_ad').value()) {
-            this.db_util.set('is_ad', 0).write()
+        // 涨停告警配置
+        if (!this.db_util.has('limit_up_alert_enabled').value()) {
+            this.db_util.set('limit_up_alert_enabled', false).write()
+        }
+
+        if (!this.db_util.has('dingtalk_webhook').value()) {
+            this.db_util.set('dingtalk_webhook', "").write()
+        }
+
+        if (!this.db_util.has('at_phone_numbers').value()) {
+            this.db_util.set('at_phone_numbers', []).write()
         }
 
         let isMac = 'darwin' === process.platform;

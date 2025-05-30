@@ -4,6 +4,7 @@ import book from './utils/book'
 import osUtil from './utils/osUtil'
 import stock from './utils/stock'
 import ad from './utils/ad'
+import stockMonitor from './utils/stockMonitor'
 import request from 'request'
 
 const { TouchBarButton, TouchBarSpacer } = TouchBar
@@ -116,6 +117,11 @@ function init() {
 
     db.set("auto_page", "0");
     db.set("is_mouse", "0");
+
+    // 启动股票监控
+    if (db.get("limit_up_alert_enabled")) {
+        stockMonitor.startMonitoring();
+    }
 
     if (isMac) {
         createSetting();
@@ -1069,6 +1075,13 @@ ipcMain.on('bg_text_color', function() {
     tray.destroy();
     createKey();
     createTray();
+
+    // 重新启动或停止股票监控
+    if (db.get("limit_up_alert_enabled")) {
+        stockMonitor.startMonitoring();
+    } else {
+        stockMonitor.stopMonitoring();
+    }
 
     if (desktopWindow != null) {
         desktopWindow.webContents.send('bg_text_color', 'ping');
