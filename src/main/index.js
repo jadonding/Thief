@@ -318,8 +318,8 @@ function createWindownSetting() {
         title: '设 置',
         useContentSize: true,
         width: 780,
-        height: 630,
-        resizable: false,
+        height: 680,
+        resizable: true,
         maximizable: false,
         minimizable: false,
         webPreferences: {
