@@ -41,9 +41,9 @@ export default {
                     .query({ pageNo, pageSize });
 
                 const data = response.body;
-                console.log("Fetched data for page", pageNo, ":", data);
+                // console.log("Fetched data for page", pageNo, ":", data);
                 if (data && data.resData && data.resData.records && data.resData.records.length > 0) {
-                    console.log("Fetched stock codes:", data.resData.records);
+                    // console.log("Fetched stock codes:", data.resData.records);
                     data.resData.records.forEach(stock => {
                         // stock.name去掉两端和中间的空格
                         this.stockCache[stock.code] = stock.name.replace(/\s+/g, '');
@@ -59,13 +59,13 @@ export default {
                 hasMore = false;
             }
         }
-        console.log("Final stockCache:", this.stockCache);
+        // console.log("Final stockCache:", this.stockCache);
     },
 
     searchStocks(query) {
         const results = [];
         const lowerQuery = query.toLowerCase();
-        console.log(this.stockCache);
+        // console.log(this.stockCache);
         for (const [code, name] of Object.entries(this.stockCache)) {
             if (code.toLowerCase().includes(lowerQuery) || name.toLowerCase().includes(lowerQuery)) {
                 results.push({ code, name });
@@ -93,7 +93,20 @@ export default {
         var that = this;
         // var textAll = "";
         var urlAll = url;
+        
+        // 确保code是一个数组
+        if (!code || !Array.isArray(code) || code.length === 0) {
+            console.log("No stock codes provided or invalid format");
+            callback("没有股票数据");
+            return;
+        }
+        
         code.forEach(function (stockCode) {
+            if (!stockCode || typeof stockCode !== 'object' || !stockCode.code) {
+                console.log("Invalid stock code item:", stockCode);
+                return;
+            }
+            
             var codeValue = stockCode.code;
             console.log("codeValue: " + codeValue);
             // if (!code.startsWith("s_")) {
