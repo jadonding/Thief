@@ -115,6 +115,7 @@ const pdfURL = process.env.NODE_ENV === 'development' ?
 function init() {
     Menu.setApplicationMenu(null);
 
+    // 初始化临时配置
     db.set("auto_page", "0");
     db.set("is_mouse", "0");
 
@@ -1215,6 +1216,34 @@ ipcMain.on('videoOpacity', function(e, v) {
     }
 })
 
+// 配置导入导出处理
+ipcMain.on('export-config', (event, path) => {
+    const result = db.exportConfig(path);
+    event.sender.send('export-config-result', result);
+});
+
+ipcMain.on('import-config', (event, path) => {
+    const result = db.importConfig(path);
+    event.sender.send('import-config-result', result);
+});
+
+// 处理股票监控更新
+ipcMain.on('update_stock_monitor', (event, enabled) => {
+    console.log('更新股票监控状态:', enabled);
+    
+    // 无论是启用还是禁用，先停止现有监控
+    stockMonitor.stopMonitoring();
+    
+    // 如果启用，则重新启动监控
+    if (enabled) {
+        setTimeout(() => {
+            stockMonitor.startMonitoring();
+        }, 500); // 稍微延迟，确保配置已保存
+    }
+});
+
+
+
 // const shouldQuit = app.makeSingleInstance((commandLine, workingDirectory) => {
 //   // Someone tried to run a second instance, we should focus our window.
 //   if (desktopWindow) {
@@ -1227,14 +1256,25 @@ ipcMain.on('videoOpacity', function(e, v) {
 //   app.quit()
 // }
 
+// 应用启动时初始化
 app.on('ready', init)
 
 app.on('window-all-closed', () => {
-    db.set("auto_page", "0");
-    db.set("is_mouse", "0");
+    try {
+        // 重置临时配置
+        db.set("auto_page", "0");
+        db.set("is_mouse", "0");
 
-    if (isMac) {
-        db.set("curr_model", "1")
+        if (isMac) {
+            db.set("curr_model", "1");
+        }
+        
+        // 确保配置变更被保存并备份
+        db.createBackup();
+        
+        console.log('Configuration saved successfully before exit');
+    } catch (err) {
+        console.error('Error saving configuration on exit:', err);
     }
 
     if (process.platform !== 'darwin') {

@@ -21,12 +21,18 @@ export default {
             return;
         }
 
-        if (this.monitorInterval) {
-            console.log("股票监控已在运行");
-            return;
-        }
-
+        // 确保先停止现有的监控
+        this.stopMonitoring();
+        
         console.log("开始监控涨停股票...");
+        
+        // 打印配置文件中的股票代码
+        this.logCurrentStocks();
+        
+        // 立即执行一次检查，验证股票代码是否有效
+        setTimeout(() => {
+            this.checkStocks();
+        }, 100);
         
         // 每秒检查一次
         this.monitorInterval = setInterval(() => {
@@ -50,10 +56,13 @@ export default {
      */
     async checkStocks() {
         try {
+            // 每次都重新从数据库获取最新的股票代码列表
             const stockCodes = db.get("display_shares_list") || [];
             if (stockCodes.length === 0) {
                 return;
             }
+            
+            console.log('检查股票：', stockCodes.map(s => s.code).join(','));
 
             stockUtils.getData(stockCodes, (result) => {
                 this.parseAndAnalyzeStockData(result, stockCodes);
@@ -285,5 +294,46 @@ export default {
         this.sealedStocks.clear();
         this.weakSealAlerted.clear();
         console.log("监控数据已重置");
-    }
+    },
+
+    /**
+     * 打印当前配置的股票代码（用于调试）
+     */
+    logCurrentStocks() {
+        try {
+            console.log('-------- 配置文件中的股票代码 --------');
+            const stockCodes = db.get("display_shares_list") || [];
+            console.log('股票数量:', stockCodes.length);
+            if (stockCodes.length > 0) {
+                stockCodes.forEach((stock, index) => {
+                    console.log(`股票 ${index+1}:`, JSON.stringify(stock));
+                });
+            } else {
+                console.log('未配置股票');
+            }
+            console.log('------------------------------------');
+            
+            // 尝试检查文件内容
+            try {
+                const fs = require('fs-extra');
+                const path = require('path');
+                const electron = require('electron');
+                const app = electron.app || electron.remote.app;
+                const userData = app.getPath('userData');
+                const configPath = path.join(userData, '/thief_data.json');
+                
+                if (fs.existsSync(configPath)) {
+                    const configContent = fs.readFileSync(configPath, 'utf8');
+                    const configObj = JSON.parse(configContent);
+                    console.log('直接从文件读取的股票代码:', JSON.stringify(configObj.display_shares_list || []));
+                } else {
+                    console.log('配置文件不存在:', configPath);
+                }
+            } catch (fileErr) {
+                console.error('读取配置文件失败:', fileErr);
+            }
+        } catch (err) {
+            console.error('打印股票代码失败:', err);
+        }
+    },
 };

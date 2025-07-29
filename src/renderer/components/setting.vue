@@ -160,6 +160,15 @@
           <el-col :span="24" style="text-align: center;">
             <el-button style="width: 91%;" type="primary" size="mini" @click="onSubmit">保存</el-button>
           </el-col>
+          
+          <!-- 配置导入导出 -->
+          <el-col :span="12" style="text-align: center; margin-top: 10px;">
+            <el-button style="width: 80%;" type="success" size="mini" @click="exportConfig">导出配置</el-button>
+          </el-col>
+          <el-col :span="12" style="text-align: center; margin-top: 10px;">
+            <el-button style="width: 80%;" type="warning" size="mini" @click="importConfig">导入配置</el-button>
+          </el-col>
+     
         </el-form>
       </div>
     </div>
@@ -542,14 +551,49 @@ export default {
       db.set("limit_up_alert_enabled", this.limit_up_alert_enabled);
       db.set("dingtalk_webhook", this.dingtalk_webhook);
       db.set("at_phone_numbers", this.at_phone_numbers);
+      
 
-      ipcRenderer.send("bg_text_color", "ping");
 
-      this.$message({
-        message: "保存成功，请尽情的摸鱼吧！",
-        type: "success",
-        showClose: true
-      });
+      // 检查配置是否正确保存
+      setTimeout(() => {
+        const configSaved = this.checkConfigSaved();
+        if (configSaved) {
+          console.log('配置保存成功并已验证');
+          
+          // 通知主进程更新股票监控
+          ipcRenderer.send("update_stock_monitor", this.limit_up_alert_enabled);
+          
+          // 更新UI
+          ipcRenderer.send("bg_text_color", "ping");
+
+          this.$message({
+            message: "保存成功，请尽情的摸鱼吧！",
+            type: "success",
+            showClose: true
+          });
+        } else {
+          console.error('配置保存失败或不一致');
+          this.$message({
+            message: "配置可能未正确保存，请重试",
+            type: "warning",
+            showClose: true
+          });
+          
+          // 尝试强制重新保存
+          db.set("display_shares_list", this.stock_code);
+          setTimeout(() => {
+            // 再次尝试验证
+            const retrySuccess = this.checkConfigSaved();
+            if (retrySuccess) {
+              console.log('重试保存成功');
+              // 通知主进程更新股票监控
+              ipcRenderer.send("update_stock_monitor", this.limit_up_alert_enabled);
+            } else {
+              console.error('重试保存仍然失败');
+            }
+          }, 500);
+        }
+      }, 500);
     },
     async onStockSearch(queryString, cb) {
       if (!queryString.trim()) {
@@ -582,7 +626,118 @@ export default {
     },
 
     onStockSelect(stocks) {
-    }
+    },
+
+    // 导出配置
+    exportConfig() {
+      const { remote } = require('electron');
+      const { dialog } = remote;
+      
+      dialog.showSaveDialog({
+        title: '导出配置',
+        defaultPath: 'thief_config.json',
+        filters: [
+          { name: '配置文件', extensions: ['json'] }
+        ]
+      }).then(result => {
+        if (!result.canceled && result.filePath) {
+          // 发送IPC消息给主进程
+          ipcRenderer.send('export-config', result.filePath);
+          
+          // 监听结果
+          ipcRenderer.once('export-config-result', (event, response) => {
+            if (response.success) {
+              this.$message.success(response.message);
+            } else {
+              this.$message.error(response.message);
+            }
+          });
+        }
+      }).catch(err => {
+        this.$message.error(`导出失败: ${err.message}`);
+      });
+    },
+    
+    // 导入配置
+    importConfig() {
+      const { remote } = require('electron');
+      const { dialog } = remote;
+      
+      dialog.showOpenDialog({
+        title: '导入配置',
+        filters: [
+          { name: '配置文件', extensions: ['json'] }
+        ],
+        properties: ['openFile']
+      }).then(result => {
+        if (!result.canceled && result.filePaths.length > 0) {
+          // 确认导入
+          this.$confirm('导入配置将覆盖当前所有设置，是否继续？', '警告', {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }).then(() => {
+            // 发送IPC消息给主进程
+            ipcRenderer.send('import-config', result.filePaths[0]);
+            
+            // 监听结果
+            ipcRenderer.once('import-config-result', (event, response) => {
+              if (response.success) {
+                this.$message.success(response.message);
+                // 重新加载配置
+                this.onLoad();
+              } else {
+                this.$message.error(response.message);
+              }
+            });
+          }).catch(() => {
+            this.$message.info('已取消导入');
+          });
+        }
+      }).catch(err => {
+        this.$message.error(`导入失败: ${err.message}`);
+      });
+    },
+
+    // 检查配置是否正确保存
+    checkConfigSaved() {
+      // 直接从本地读取配置文件
+      try {
+        const fs = require('fs-extra');
+        const path = require('path');
+        const electron = require('electron');
+        const app = electron.remote.app;
+        const userData = app.getPath('userData');
+        const configPath = path.join(userData, '/thief_data.json');
+        
+        console.log('配置文件路径:', configPath);
+        
+        if (fs.existsSync(configPath)) {
+          const configContent = fs.readFileSync(configPath, 'utf8');
+          const configObj = JSON.parse(configContent);
+          
+          console.log('配置文件中的股票代码:', JSON.stringify(configObj.display_shares_list || []));
+          console.log('当前界面中的股票代码:', JSON.stringify(this.stock_code));
+          
+          // 检查是否一致
+          const fileStocks = JSON.stringify(configObj.display_shares_list || []);
+          const currentStocks = JSON.stringify(this.stock_code);
+          
+          if (fileStocks !== currentStocks) {
+            console.error('配置保存不一致！文件中的配置与当前不匹配');
+            return false;
+          }
+          
+          return true;
+        } else {
+          console.error('配置文件不存在:', configPath);
+          return false;
+        }
+      } catch (err) {
+        console.error('检查配置保存状态失败:', err);
+        return false;
+      }
+    },
   }
 };
 </script>
