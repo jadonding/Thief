@@ -60,16 +60,109 @@ const stockUtils = {
         }
     },
 
-    // 使用东方财富API获取全A股股票数据
+    // 使用迈瑞API获取全A股股票数据
+    async fetchAllStockCodesFromMairui() {
+        console.log('开始从迈瑞API获取股票数据...');
+        
+        try {
+            const response = await request
+                .get('https://api.mairuiapi.com/hslt/list/LICENCE-66D8-9F96-0C7F0FBCD073')
+                .timeout(30000)
+                .buffer(true)
+                .parse(request.parse.text); // 禁用自动JSON解析，作为文本处理
+            
+            let stockData = null;
+            
+            if (response.text) {
+                try {
+                    stockData = JSON.parse(response.text);
+                    console.log(`从迈瑞API成功解析JSON，获取到 ${stockData.length} 条股票数据`);
+                } catch (parseError) {
+                    console.warn('JSON解析失败，尝试修复数据:', parseError.message);
+                    console.log('原始响应长度:', response.text.length);
+                    
+                    // 尝试修复被截断的JSON
+                    let fixedText = response.text;
+                    
+                    // 如果不以]结尾，说明被截断了
+                    if (!fixedText.endsWith(']')) {
+                        // 找到最后一个完整的对象
+                        const lastCompleteIndex = fixedText.lastIndexOf('}');
+                        if (lastCompleteIndex > 0) {
+                            fixedText = fixedText.substring(0, lastCompleteIndex + 1) + ']';
+                            console.log('尝试修复JSON...');
+                            
+                            try {
+                                stockData = JSON.parse(fixedText);
+                                console.log(`修复后成功解析JSON，获取到 ${stockData.length} 条股票数据`);
+                            } catch (fixError) {
+                                console.error('修复后仍无法解析:', fixError.message);
+                                return 0;
+                            }
+                        } else {
+                            console.error('无法找到完整的JSON对象');
+                            return 0;
+                        }
+                    }
+                }
+            } else {
+                console.error('迈瑞API没有返回文本数据');
+                return 0;
+            }
+            
+            if (stockData && Array.isArray(stockData)) {
+                // 处理数据格式转换
+                stockData.forEach(stock => {
+                    if (stock.dm && stock.mc) {
+                        // 提取纯代码（去掉交易所后缀）
+                        const pureCode = stock.dm.split('.')[0];
+                        
+                        // 将数据存储到缓存中
+                        this.stockCache[pureCode] = {
+                            code: pureCode,
+                            name: stock.mc.trim(),
+                            fullCode: stock.dm, // 保留完整代码
+                            exchange: stock.jys
+                        };
+                        
+                        // 同时以名称为键存储，便于按名称搜索
+                        this.stockCache[stock.mc.trim()] = {
+                            code: pureCode,
+                            name: stock.mc.trim(),
+                            fullCode: stock.dm,
+                            exchange: stock.jys
+                        };
+                    }
+                });
+                
+                console.log(`迈瑞API数据处理完成，缓存中共有 ${Object.keys(this.stockCache).length} 条记录`);
+                return stockData.length;
+            } else {
+                console.error('迈瑞API返回数据格式不正确');
+                return 0;
+            }
+        } catch (error) {
+            console.error('迈瑞API获取失败:', error);
+            return 0;
+        }
+    },
+
+    // 更新获取股票数据的主方法
     async fetchAllStockCodesFromEastMoney() {
-        console.log('开始从东方财富API获取股票数据...');
+        console.log('开始获取股票数据...');
         this.stockCache = {}; // 清空现有缓存
         
         try {
-            // 方法1: 尝试使用东方财富的数据接口
-            await this.tryEastmoneyApi();
+            // 方法1: 优先使用迈瑞API
+            let count = await this.fetchAllStockCodesFromMairui();
             
-            // 方法2: 如果数据量不够，尝试新浪财经
+            // 方法2: 如果迈瑞API失败或数据不够，尝试东方财富API
+            if (count < 1000) {
+                console.log('迈瑞API数据量不足，尝试东方财富API作为补充...');
+                await this.tryEastmoneyApi();
+            }
+            
+            // 方法3: 如果数据量还是不够，尝试新浪财经
             if (Object.keys(this.stockCache).length < 1000) {
                 console.log('尝试使用新浪财经API获取股票数据...');
                 await this.trySinaApi();
@@ -83,6 +176,13 @@ const stockUtils = {
             return Object.keys(this.stockCache).length;
         } catch (error) {
             console.error('获取股票数据失败:', error);
+            
+            // 如果所有API都失败，至少保证有基础数据
+            console.log('所有API都失败，使用基础股票数据');
+            this.addBasicStockData();
+            this.saveStockCacheToStorage();
+            
+            return Object.keys(this.stockCache).length;
         }
     },
 
@@ -162,7 +262,62 @@ const stockUtils = {
         }
     },
 
-  
+    // 添加基础股票数据作为备用
+    addBasicStockData() {
+        console.log('添加基础股票数据...');
+        
+        const basicStocks = [
+            { code: "000001", name: "平安银行" },
+            { code: "000002", name: "万科A" },
+            { code: "000858", name: "五粮液" },
+            { code: "000876", name: "新希望" },
+            { code: "002142", name: "宁波银行" },
+            { code: "002415", name: "海康威视" },
+            { code: "002475", name: "立讯精密" },
+            { code: "300059", name: "东方财富" },
+            { code: "300274", name: "阳光电源" },
+            { code: "300750", name: "宁德时代" },
+            { code: "600000", name: "浦发银行" },
+            { code: "600036", name: "招商银行" },
+            { code: "600519", name: "贵州茅台" },
+            { code: "600900", name: "长江电力" },
+            { code: "000858", name: "五粮液" },
+            { code: "002304", name: "洋河股份" },
+            { code: "600887", name: "伊利股份" },
+            { code: "000063", name: "中兴通讯" },
+            { code: "002230", name: "科大讯飞" },
+            { code: "300015", name: "爱尔眼科" },
+            { code: "300033", name: "同花顺" },
+            { code: "600276", name: "恒瑞医药" },
+            { code: "300142", name: "沃森生物" },
+            { code: "002027", name: "分众传媒" },
+            { code: "002008", name: "大族激光" },
+            { code: "300144", name: "宋城演艺" },
+            { code: "300347", name: "泰格医药" },
+            { code: "688111", name: "金山办公" },
+            { code: "688981", name: "中芯国际" },
+            { code: "688099", name: "晶晨股份" }
+        ];
+        
+        basicStocks.forEach(stock => {
+            this.stockCache[stock.code] = {
+                code: stock.code,
+                name: stock.name,
+                fullCode: stock.code,
+                exchange: stock.code.startsWith('6') ? 'SH' : 'SZ'
+            };
+            
+            // 同时以名称为键存储
+            this.stockCache[stock.name] = {
+                code: stock.code,
+                name: stock.name,
+                fullCode: stock.code,
+                exchange: stock.code.startsWith('6') ? 'SH' : 'SZ'
+            };
+        });
+        
+        console.log(`添加了 ${basicStocks.length} 条基础股票数据`);
+    },
 
     // 手动刷新股票数据（供设置页面调用）
     async refreshStockData() {
@@ -183,13 +338,64 @@ const stockUtils = {
         };
     },
 
+    // 搜索股票（按代码或名称）
     searchStocks(query) {
+        if (!query || query.trim().length === 0) {
+            return [];
+        }
+
         const results = [];
-        const lowerQuery = query.toLowerCase();
-        // console.log(this.stockCache);
-        for (const [code, name] of Object.entries(this.stockCache)) {
-            if (code.toLowerCase().includes(lowerQuery) || name.toLowerCase().includes(lowerQuery)) {
-                results.push({ code, name });
+        const lowerQuery = query.toLowerCase().trim();
+        const resultSet = new Set(); // 用于去重
+
+        // 确保股票缓存已初始化
+        if (!this.isStockCacheInitialized) {
+            console.warn('股票缓存尚未初始化');
+            return [];
+        }
+
+        // 遍历股票缓存
+        for (const [key, stockInfo] of Object.entries(this.stockCache)) {
+            if (!stockInfo || typeof stockInfo !== 'object') {
+                continue;
+            }
+
+            const { code, name } = stockInfo;
+            if (!code || !name) {
+                continue;
+            }
+
+            const lowerCode = code.toLowerCase();
+            const lowerName = name.toLowerCase();
+
+            // 精确匹配优先
+            if (lowerCode === lowerQuery || lowerName === lowerQuery) {
+                const resultKey = `${code}_${name}`;
+                if (!resultSet.has(resultKey)) {
+                    results.unshift({ code, name }); // 精确匹配放在前面
+                    resultSet.add(resultKey);
+                }
+            }
+            // 前缀匹配
+            else if (lowerCode.startsWith(lowerQuery) || lowerName.startsWith(lowerQuery)) {
+                const resultKey = `${code}_${name}`;
+                if (!resultSet.has(resultKey)) {
+                    results.push({ code, name });
+                    resultSet.add(resultKey);
+                }
+            }
+            // 包含匹配
+            else if (lowerCode.includes(lowerQuery) || lowerName.includes(lowerQuery)) {
+                const resultKey = `${code}_${name}`;
+                if (!resultSet.has(resultKey) && results.length < 20) { // 限制包含匹配的数量
+                    results.push({ code, name });
+                    resultSet.add(resultKey);
+                }
+            }
+
+            // 限制总结果数量
+            if (results.length >= 50) {
+                break;
             }
         }
 
@@ -200,9 +406,12 @@ const stockUtils = {
         const results = [];
         const lowerQuery = query.toLowerCase();
 
-        for (const [code, name] of Object.entries(this.stockCache)) {
-            if (code.toLowerCase().startsWith(lowerQuery) || name.toLowerCase().startsWith(lowerQuery)) {
-                results.push({ code, name });
+        for (const [key, stockInfo] of Object.entries(this.stockCache)) {
+            if (typeof stockInfo === 'object' && stockInfo.code && stockInfo.name) {
+                const { code, name } = stockInfo;
+                if (code.toLowerCase().startsWith(lowerQuery) || name.toLowerCase().startsWith(lowerQuery)) {
+                    results.push({ code, name });
+                }
             }
         }
 
