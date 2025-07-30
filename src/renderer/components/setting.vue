@@ -317,10 +317,20 @@ export default {
         // 如果输入被清空，也清空对应的 stock_code 条目
         this.stock_code[index].code = "";
         this.stock_code[index].name = "";
-        // stockDisplay[index] 已经通过 v-model 更新为空
         return;
       }
 
+      // 首先确保股票缓存已初始化
+      if (!stockUtils.isStockCacheInitialized) {
+        stockUtils.initializeStockCache().then(() => {
+          this.performStockSearch(index, inputValue);
+        });
+      } else {
+        this.performStockSearch(index, inputValue);
+      }
+    },
+
+    performStockSearch(index, inputValue) {
       const results = stockUtils.searchStocks(inputValue);
       let matchedStock = null;
 
@@ -340,17 +350,20 @@ export default {
       if (matchedStock) {
         this.stock_code[index].code = matchedStock.code;
         this.stock_code[index].name = matchedStock.name;
-        this.$set(this.stockDisplay, index, matchedStock.name || matchedStock.code); // 更新显示为名称或代码
+        this.$set(this.stockDisplay, index, matchedStock.name || matchedStock.code);
       } else {
-        // 未找到明确匹配项，将输入视为代码
+        // 未找到明确匹配项，将输入视为代码或名称
         this.stock_code[index].code = inputValue;
-        // 根据输入格式判断是代码还是名称，相应设置 name 字段
+        
+        // 根据输入格式判断是代码还是名称
         if (/^[0-9]{6}$/.test(inputValue) || /^(sh|sz|bj)[0-9]{6}$/i.test(inputValue)) {
-          this.stock_code[index].name = ""; // 是代码格式，name 可空或尝试异步获取
+          // 是代码格式
+          this.stock_code[index].name = "";
         } else {
-          this.stock_code[index].name = inputValue; // 不是标准代码格式，视为名称
+          // 不是标准代码格式，视为名称
+          this.stock_code[index].name = inputValue;
         }
-        // stockDisplay[index] 保持用户输入的值 (v-model 已处理)
+        
         this.$set(this.stockDisplay, index, inputValue);
       }
     },
@@ -643,12 +656,31 @@ export default {
       }, 200);
     },
     async onStockSearch(queryString, cb) {
-      if (!queryString.trim()) {
+      try {
+        if (!queryString || !queryString.trim()) {
+          cb([]);
+          return;
+        }
+        
+        // 确保股票工具已初始化
+        if (!stockUtils.isStockCacheInitialized) {
+          await stockUtils.initializeStockCache();
+        }
+        
+        const results = stockUtils.searchStocks(queryString.trim());
+        
+        // 格式化结果以适应el-autocomplete的显示要求
+        const formattedResults = results.map(stock => ({
+          value: stock.name && stock.name.trim() ? `${stock.name} (${stock.code})` : stock.code,
+          name: stock.name || stock.code,
+          code: stock.code
+        }));
+        
+        cb(formattedResults);
+      } catch (error) {
+        console.error('股票搜索出错:', error);
         cb([]);
-        return;
       }
-      const results = stockUtils.searchStocks(queryString);
-      cb(results.map(stock => ({ value: stock.name + " (" + stock.code + ")", name: stock.name, code: stock.code }))); // 修改cb的返回格式以适应el-autocomplete的显示
     },
 
     selectStock(stock) { // stock is { value: "...", name: "...", code: "..." }
