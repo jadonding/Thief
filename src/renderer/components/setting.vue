@@ -182,7 +182,19 @@
           <el-form-item label="摸鱼文字">
             <el-input style="width:130px;" v-model="moyu_text" maxlength="100" size="mini" placeholder="请输入摸鱼文字"
               prefix-icon="el-icon-umbrella"></el-input>
-          </el-form-item> <el-form-item label="股票代码">
+          </el-form-item>
+          <el-form-item label="股票代码">
+            <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px;">
+              <el-button type="success" size="mini" icon="el-icon-refresh" @click="refreshStockData" 
+                :loading="stockRefreshLoading">
+                {{ stockRefreshLoading ? '获取中...' : '获取全A股数据' }}
+              </el-button>
+              <span style="font-size: 12px; color: #999;" v-if="stockCacheInfo.count > 0">
+                已缓存 {{ stockCacheInfo.count }} 条股票数据
+                <br>
+                更新时间: {{ formatUpdateTime(stockCacheInfo.updateTime) }}
+              </span>
+            </div>
             <div v-for="(codeObj, index) in stock_code" :key="index" style="align-items: center; margin-bottom: 5px;">
               <el-input style="width:100px;" v-model="stockDisplay[index]" size="mini" placeholder="代码/名称"
                 @blur="updateStockCodeFromInput(index)"></el-input>
@@ -277,12 +289,20 @@ export default {
       // 涨停告警相关
       limit_up_alert_enabled: false,
       dingtalk_webhook: "",
-      at_phone_numbers: []
+      at_phone_numbers: [],
+      // 股票数据刷新相关
+      stockRefreshLoading: false,
+      stockCacheInfo: {
+        count: 0,
+        updateTime: '',
+        isInitialized: false
+      }
     };
   },
   created() {
     this.onLoad();
     this.onKey();
+    this.loadStockCacheInfo();
   },
   methods: {
     updateStockCodeFromInput(index) {
@@ -503,7 +523,9 @@ export default {
       this.stock_code = savedStocks.map(stock => ({
         code: stock.code,
         name: stock.name || "" // 确保 name 存在，即使是空字符串
-      })); this.stockDisplay = this.stock_code.map(stock => stock.name || stock.code); // 优先显示名称
+      })); 
+      
+      this.stockDisplay = this.stock_code.map(stock => stock.name || stock.code); // 优先显示名称
 
       this.moyu_text = db.get("moyu_text");
 
@@ -519,53 +541,71 @@ export default {
       });
     },
     onSubmit() {
-      db.set("current_page", this.form.curr_page);
-      db.set("page_size", this.form.page_size);
-      db.set("is_english", this.form.is_english);
-      db.set("line_break", this.form.line_break);
-      db.set("current_file_path", this.form.file_path);
-      db.set("bg_color", this.form.bg_color);
-      db.set("txt_color", this.form.txt_color);
-      db.set("font_size", this.form.font_size);
-      db.set("second", this.form.second);
-
-      var key_previous = this.keyPrevious + "+" + this.keyPreviousX;
-      db.set("key_previous", key_previous);
-
-      var key_next = this.keyNext + "+" + this.keyNextX;
-      db.set("key_next", key_next);
-
-      var key_boss = this.keyBoss + "+" + this.keyBossX;
-      db.set("key_boss", key_boss);
-
-      var key_auto = this.keyAuto + "+" + this.keyAutoX;
-      db.set("key_auto", key_auto);
-
-      db.set("errCodeChecked", this.form.errCodeChecked);
-
-      db.set("is_display_page", this.is_display_page); db.set("display_shares_list", this.stock_code); // 保存股票代码和名称
-
-      db.set("moyu_text", this.moyu_text);
-
-      // 保存涨停告警配置
-      db.set("limit_up_alert_enabled", this.limit_up_alert_enabled);
-      db.set("dingtalk_webhook", this.dingtalk_webhook);
-      db.set("at_phone_numbers", this.at_phone_numbers);
+      console.log('开始保存配置...');
+      console.log('当前股票代码原始数据:', JSON.stringify(this.stock_code));
+      console.log('股票代码数据类型:', typeof this.stock_code);
+      console.log('股票代码是否为数组:', Array.isArray(this.stock_code));
       
+      // 确保股票代码数据格式正确
+      const stockList = Array.isArray(this.stock_code) 
+        ? this.stock_code.filter(stock => stock && stock.code && stock.code.trim()) 
+        : [];
+      
+      console.log('清理后的股票代码:', JSON.stringify(stockList));
+      
+      // 准备所有配置数据
+      const configData = {
+        "current_page": this.form.curr_page,
+        "page_size": this.form.page_size,
+        "is_english": this.form.is_english,
+        "line_break": this.form.line_break,
+        "current_file_path": this.form.file_path,
+        "bg_color": this.form.bg_color,
+        "txt_color": this.form.txt_color,
+        "font_size": this.form.font_size,
+        "second": this.form.second,
+        "key_previous": this.keyPrevious + "+" + this.keyPreviousX,
+        "key_next": this.keyNext + "+" + this.keyNextX,
+        "key_boss": this.keyBoss + "+" + this.keyBossX,
+        "key_auto": this.keyAuto + "+" + this.keyAutoX,
+        "errCodeChecked": this.form.errCodeChecked,
+        "is_display_page": this.is_display_page,
+        "display_shares_list": stockList, // 使用清理后的股票数据
+        "moyu_text": this.moyu_text,
+        "limit_up_alert_enabled": this.limit_up_alert_enabled,
+        "dingtalk_webhook": this.dingtalk_webhook,
+        "at_phone_numbers": this.at_phone_numbers
+      };
+      
+      console.log('即将保存的配置数据 display_shares_list:', JSON.stringify(configData.display_shares_list));
+      
+      // 使用批量保存
+      const batchSuccess = db.setBatch(configData);
+      
+      if (!batchSuccess) {
+        // 如果批量保存失败，使用逐个保存的方式
+        console.warn('批量保存失败，尝试逐个保存');
+        
+        Object.entries(configData).forEach(([key, value]) => {
+          const success = db.set(key, value);
+          if (!success) {
+            console.error(`保存配置项 ${key} 失败`);
+          }
+        });
+      }
+      
+      // 立即通知主进程更新股票监控（不等待验证）
+      ipcRenderer.send("update_stock_monitor", this.limit_up_alert_enabled);
+      
+      // 更新UI
+      ipcRenderer.send("bg_text_color", "ping");
 
-
-      // 检查配置是否正确保存
+      // 验证配置保存
       setTimeout(() => {
         const configSaved = this.checkConfigSaved();
         if (configSaved) {
           console.log('配置保存成功并已验证');
           
-          // 通知主进程更新股票监控
-          ipcRenderer.send("update_stock_monitor", this.limit_up_alert_enabled);
-          
-          // 更新UI
-          ipcRenderer.send("bg_text_color", "ping");
-
           this.$message({
             message: "保存成功，请尽情的摸鱼吧！",
             type: "success",
@@ -573,27 +613,34 @@ export default {
           });
         } else {
           console.error('配置保存失败或不一致');
-          this.$message({
-            message: "配置可能未正确保存，请重试",
-            type: "warning",
-            showClose: true
-          });
           
           // 尝试强制重新保存
           db.set("display_shares_list", this.stock_code);
+          
+          // 再次通知主进程更新股票监控
           setTimeout(() => {
-            // 再次尝试验证
+            ipcRenderer.send("update_stock_monitor", this.limit_up_alert_enabled);
+            
+            // 再次验证
             const retrySuccess = this.checkConfigSaved();
             if (retrySuccess) {
               console.log('重试保存成功');
-              // 通知主进程更新股票监控
-              ipcRenderer.send("update_stock_monitor", this.limit_up_alert_enabled);
+              this.$message({
+                message: "配置已成功保存",
+                type: "success",
+                showClose: true
+              });
             } else {
               console.error('重试保存仍然失败');
+              this.$message({
+                message: "配置保存可能有问题，请重新设置",
+                type: "warning",
+                showClose: true
+              });
             }
-          }, 500);
+          }, 300);
         }
-      }, 500);
+      }, 200);
     },
     async onStockSearch(queryString, cb) {
       if (!queryString.trim()) {
@@ -736,6 +783,67 @@ export default {
       } catch (err) {
         console.error('检查配置保存状态失败:', err);
         return false;
+      }
+    },
+
+    // 加载股票缓存信息
+    loadStockCacheInfo() {
+      ipcRenderer.send('get_stock_cache_info');
+      
+      ipcRenderer.once('get_stock_cache_info_result', (event, response) => {
+        if (response.success) {
+          this.stockCacheInfo = response.data;
+        } else {
+          console.error('获取股票缓存信息失败:', response.message);
+        }
+      });
+    },
+
+    // 刷新股票数据
+    refreshStockData() {
+      this.stockRefreshLoading = true;
+      
+      ipcRenderer.send('refresh_stock_data');
+      
+      ipcRenderer.once('refresh_stock_data_result', (event, response) => {
+        this.stockRefreshLoading = false;
+        
+        if (response.success) {
+          this.$message({
+            message: response.message,
+            type: 'success',
+            showClose: true
+          });
+          
+          // 刷新缓存信息
+          this.loadStockCacheInfo();
+        } else {
+          this.$message({
+            message: response.message,
+            type: 'error',
+            showClose: true
+          });
+        }
+      });
+    },
+
+    // 格式化更新时间
+    formatUpdateTime(timeStr) {
+      if (!timeStr || timeStr === '未知') {
+        return '未知';
+      }
+      
+      try {
+        const date = new Date(timeStr);
+        return date.toLocaleString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } catch (error) {
+        return '未知';
       }
     },
   }

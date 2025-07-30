@@ -52,6 +52,35 @@ export default {
     },
 
     /**
+     * 重新启动监控（强制刷新配置）
+     */
+    restartMonitoring() {
+        console.log("重新启动股票监控...");
+        
+        // 强制重新加载配置文件
+        console.log("强制重新加载配置文件...");
+        db.reloadConfig();
+        
+        // 清除所有历史状态
+        this.stockHistory.clear();
+        this.lastCheckTime.clear();
+        this.maxSealAmounts.clear();
+        this.alertCounts.clear();
+        this.sealedStocks.clear();
+        this.weakSealAlerted.clear();
+        
+        // 停止当前监控
+        this.stopMonitoring();
+        
+        // 延迟100ms后重新启动
+        setTimeout(() => {
+            if (db.get("limit_up_alert_enabled")) {
+                this.startMonitoring();
+            }
+        }, 100);
+    },
+
+    /**
      * 检查所有配置的股票
      */
     async checkStocks() {
@@ -326,6 +355,23 @@ export default {
                     const configContent = fs.readFileSync(configPath, 'utf8');
                     const configObj = JSON.parse(configContent);
                     console.log('直接从文件读取的股票代码:', JSON.stringify(configObj.display_shares_list || []));
+                    
+                    // 比较数据库读取和文件读取的结果
+                    const dbStocks = JSON.stringify(stockCodes);
+                    const fileStocks = JSON.stringify(configObj.display_shares_list || []);
+                    
+                    if (dbStocks !== fileStocks) {
+                        console.error('⚠️ 警告：数据库读取的股票代码与文件中的不一致！');
+                        console.error('数据库读取:', dbStocks);
+                        console.error('文件读取:', fileStocks);
+                        
+                        // 强制重新加载数据库
+                        db.reloadConfig();
+                        const reloadedStocks = db.get("display_shares_list") || [];
+                        console.log('重新加载后的股票代码:', JSON.stringify(reloadedStocks));
+                    } else {
+                        console.log('✓ 数据库和文件中的股票代码一致');
+                    }
                 } else {
                     console.log('配置文件不存在:', configPath);
                 }
