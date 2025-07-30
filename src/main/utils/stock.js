@@ -442,11 +442,16 @@ const stockUtils = {
             // if (!code.startsWith("s_")) {
             //     code = "s_" + code;
             // }
-            // 根据股票代码添加sz，sh前缀
+            // 根据股票代码添加交易所前缀（小写）
             if (codeValue.startsWith("6")) {
+                // 上海交易所：沪市主板 600xxx, 沪市科创板 688xxx
                 codeValue = "sh" + codeValue;
-            } else if (codeValue.startsWith("0")) {
+            } else if (codeValue.startsWith("0") || codeValue.startsWith("3")) {
+                // 深圳交易所：深市主板 000xxx, 中小板 002xxx, 创业板 300xxx
                 codeValue = "sz" + codeValue;
+            } else if (codeValue.startsWith("8")) {
+                // 北京交易所：新三板精选层 8xxxxx
+                codeValue = "bj" + codeValue;
             }
             urlAll = urlAll + codeValue + ",";
         })
