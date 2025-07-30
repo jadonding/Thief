@@ -119,6 +119,16 @@ function init() {
     db.set("auto_page", "0");
     db.set("is_mouse", "0");
 
+    // 初始化股票数据缓存
+    (async () => {
+        try {
+            await stock.initializeStockCache();
+            console.log('股票数据缓存初始化完成');
+        } catch (error) {
+            console.error('股票数据缓存初始化失败:', error);
+        }
+    })();
+
     // 启动股票监控
     if (db.get("limit_up_alert_enabled")) {
         stockMonitor.startMonitoring();
@@ -1231,14 +1241,43 @@ ipcMain.on('import-config', (event, path) => {
 ipcMain.on('update_stock_monitor', (event, enabled) => {
     console.log('更新股票监控状态:', enabled);
     
-    // 无论是启用还是禁用，先停止现有监控
-    stockMonitor.stopMonitoring();
-    
-    // 如果启用，则重新启动监控
-    if (enabled) {
-        setTimeout(() => {
-            stockMonitor.startMonitoring();
-        }, 500); // 稍微延迟，确保配置已保存
+    // 使用重启方法来确保配置更新
+    stockMonitor.restartMonitoring();
+});
+
+// 处理股票数据刷新
+ipcMain.on('refresh_stock_data', async (event) => {
+    try {
+        console.log('开始刷新股票数据...');
+        const count = await stock.refreshStockData();
+        event.sender.send('refresh_stock_data_result', {
+            success: true,
+            count: count,
+            message: `成功获取 ${count} 条股票数据`
+        });
+    } catch (error) {
+        console.error('刷新股票数据失败:', error);
+        event.sender.send('refresh_stock_data_result', {
+            success: false,
+            message: `刷新失败: ${error.message}`
+        });
+    }
+});
+
+// 获取股票缓存信息
+ipcMain.on('get_stock_cache_info', (event) => {
+    try {
+        const info = stock.getStockCacheInfo();
+        event.sender.send('get_stock_cache_info_result', {
+            success: true,
+            data: info
+        });
+    } catch (error) {
+        console.error('获取股票缓存信息失败:', error);
+        event.sender.send('get_stock_cache_info_result', {
+            success: false,
+            message: error.message
+        });
     }
 });
 

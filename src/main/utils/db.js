@@ -145,7 +145,10 @@ export default {
             limit_up_alert_enabled: true,
             dingtalk_webhook: "https://oapi.dingtalk.com/robot/send?access_token=075525de2be812c31c727e4ac783ed2969cf9c8e05974aa2db0d630ac88e95e2",
             at_phone_numbers: ["17195252748"],
-            curr_model: ('darwin' === process.platform) ? "1" : "2"
+            curr_model: ('darwin' === process.platform) ? "1" : "2",
+            // 股票数据缓存相关
+            stock_code_mapping: {},
+            stock_cache_update_time: null
         };
         
         // 设置默认值
@@ -315,9 +318,27 @@ export default {
                 return false;
             }
             
-            // 写入配置
+            console.log(`设置配置项 '${key}':`, value);
+            
+            // 写入配置并立即刷新到磁盘
             this.db_util.set(key, value).write();
-            return true;
+            
+            // 立即创建备份
+            this.createBackup();
+            
+            // 验证写入是否成功
+            const writtenValue = this.db_util.get(key).value();
+            const success = JSON.stringify(writtenValue) === JSON.stringify(value);
+            
+            if (success) {
+                console.log(`配置项 '${key}' 写入成功`);
+            } else {
+                console.error(`配置项 '${key}' 写入验证失败`);
+                console.error('期望值:', value);
+                console.error('实际值:', writtenValue);
+            }
+            
+            return success;
         } catch (err) {
             console.error(`Error setting config '${key}':`, err);
             
@@ -326,12 +347,70 @@ export default {
                 this.initialized = false;
                 if (this.init()) {
                     this.db_util.set(key, value).write();
-                    return true;
+                    this.createBackup();
+                    
+                    // 再次验证
+                    const writtenValue = this.db_util.get(key).value();
+                    const success = JSON.stringify(writtenValue) === JSON.stringify(value);
+                    
+                    if (success) {
+                        console.log(`配置项 '${key}' 重试写入成功`);
+                    } else {
+                        console.error(`配置项 '${key}' 重试写入验证失败`);
+                    }
+                    
+                    return success;
                 }
             } catch (retryErr) {
                 console.error(`Retry failed for setting '${key}':`, retryErr);
             }
             
+            return false;
+        }
+    },
+    
+    // 批量设置配置值（原子性操作）
+    setBatch(configMap) {
+        try {
+            if (!this.initialized && !this.init()) {
+                console.error('Failed to initialize database when setting batch config');
+                return false;
+            }
+            
+            console.log('批量设置配置项:', Object.keys(configMap));
+            console.log('display_shares_list 输入值:', JSON.stringify(configMap.display_shares_list));
+            
+            // 批量写入所有配置
+            Object.entries(configMap).forEach(([key, value]) => {
+                console.log(`设置配置项 '${key}':`, typeof value === 'object' ? JSON.stringify(value) : value);
+                this.db_util.set(key, value);
+            });
+            
+            // 统一写入到磁盘
+            this.db_util.write();
+            
+            // 立即创建备份
+            this.createBackup();
+            
+            // 验证所有写入是否成功
+            let allSuccess = true;
+            Object.entries(configMap).forEach(([key, value]) => {
+                const writtenValue = this.db_util.get(key).value();
+                const success = JSON.stringify(writtenValue) === JSON.stringify(value);
+                
+                if (success) {
+                    console.log(`批量配置项 '${key}' 写入成功`);
+                } else {
+                    console.error(`批量配置项 '${key}' 写入验证失败`);
+                    console.error('期望值:', JSON.stringify(value));
+                    console.error('实际值:', JSON.stringify(writtenValue));
+                    allSuccess = false;
+                }
+            });
+            
+            return allSuccess;
+        } catch (err) {
+            console.error('Error setting batch config:', err);
             return false;
         }
     },
