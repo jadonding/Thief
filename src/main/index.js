@@ -1083,6 +1083,17 @@ function createSetting() {
 }
 
 ipcMain.on('bg_text_color', function() {
+    console.log('主进程收到bg_text_color事件');
+    
+    // 读取最新的颜色配置
+    const colorConfig = {
+        bg_color: db.get("bg_color"),
+        txt_color: db.get("txt_color"),
+        font_size: db.get("font_size")
+    };
+    
+    console.log('读取到的最新颜色配置:', colorConfig);
+    
     tray.destroy();
     createKey();
     createTray();
@@ -1095,11 +1106,17 @@ ipcMain.on('bg_text_color', function() {
     }
 
     if (desktopWindow != null) {
-        desktopWindow.webContents.send('bg_text_color', 'ping');
+        console.log('向desktopWindow发送bg_text_color消息，携带颜色配置');
+        desktopWindow.webContents.send('bg_text_color', colorConfig);
+    } else {
+        console.log('desktopWindow为null，无法发送消息');
     }
 
     if (desktopBarWindow != null) {
-        desktopBarWindow.webContents.send('bg_text_color', 'ping');
+        console.log('向desktopBarWindow发送bg_text_color消息，携带颜色配置');
+        desktopBarWindow.webContents.send('bg_text_color', colorConfig);
+    } else {
+        console.log('desktopBarWindow为null，无法发送消息');
     }
 })
 

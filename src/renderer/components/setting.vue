@@ -611,6 +611,10 @@ export default {
       ipcRenderer.send("update_stock_monitor", this.limit_up_alert_enabled);
       
       // 更新UI
+      console.log('准备发送bg_text_color事件，当前颜色配置:');
+      console.log('背景色:', this.form.bg_color);
+      console.log('文字颜色:', this.form.txt_color);
+      
       ipcRenderer.send("bg_text_color", "ping");
 
       // 验证配置保存
