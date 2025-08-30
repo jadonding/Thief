@@ -6,8 +6,6 @@ const path = require('path')
 const { dependencies } = require('../package.json')
 const webpack = require('webpack')
 
-const BabiliWebpackPlugin = require('babili-webpack-plugin')
-
 let mainConfig = {
   entry: {
     main: path.join(__dirname, '../src/main/index.js')
@@ -34,16 +32,17 @@ let mainConfig = {
   },
   output: {
     filename: '[name].js',
-    libraryTarget: 'commonjs2',
+    library: {
+      type: 'commonjs2'
+    },
     path: path.join(__dirname, '../dist/electron')
   },
-  plugins: [
-    new webpack.NoEmitOnErrorsPlugin()
-  ],
+  plugins: [],
   resolve: {
     extensions: ['.js', '.json', '.node']
   },
-  target: 'electron-main'
+  target: 'electron-main',
+  mode: process.env.NODE_ENV === 'production' ? 'production' : 'development'
 }
 
 /**
@@ -62,7 +61,6 @@ if (process.env.NODE_ENV !== 'production') {
  */
 if (process.env.NODE_ENV === 'production') {
   mainConfig.plugins.push(
-    new BabiliWebpackPlugin(),
     new webpack.DefinePlugin({
       'process.env.NODE_ENV': '"production"'
     })

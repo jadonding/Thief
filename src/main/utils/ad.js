@@ -1,13 +1,13 @@
 'use strict';
-var rp = require('request-promise');
+import axios from 'axios';
 
 const url = 'http://ad.c.team/ad?p=thief-book';
 
 export default {
     getAd(callback) {
-        rp(url)
-            .then(function(result) {
-                callback(result)
+        axios.get(url)
+            .then(function(response) {
+                callback(response.data)
             })
             .catch(function(err) {
                 callback("err")
