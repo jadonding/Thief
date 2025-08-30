@@ -5,7 +5,7 @@ import osUtil from './utils/osUtil'
 import stock from './utils/stock'
 import ad from './utils/ad'
 import stockMonitor from './utils/stockMonitor'
-import request from 'request'
+import axios from 'axios'
 
 const { TouchBarButton, TouchBarSpacer } = TouchBar
 
@@ -691,40 +691,41 @@ function BossKey(type) {
 
 
 function checkUpdate() {
-    request({
-        url: "https://gitee.com/lauix/public_version/raw/master/version.txt",
-        method: "GET"
-    }, function(err, res, body) {
-        const logo = `${__static}/icon.png`;
-        const image = nativeImage.createFromPath(logo)
+    axios.get("https://gitee.com/lauix/public_version/raw/master/version.txt")
+        .then(response => {
+            const logo = `${__static}/icon.png`;
+            const image = nativeImage.createFromPath(logo)
 
-        var newVersion = parseFloat(body);
+            var newVersion = parseFloat(response.data);
 
-        var currVersion = 4.0
-        if (newVersion > currVersion) {
-            const options = {
-                type: 'info',
-                title: '检查更新',
-                message: "发现新版本，是否更新？",
-                buttons: ['是', '否'],
-                icon: image
-            }
-            dialog.showMessageBox(options, function(index) {
-                if (index == 0) {
-                    shell.openExternal('https://github.com/cteamx/Thief/releases')
+            var currVersion = 4.0
+            if (newVersion > currVersion) {
+                const options = {
+                    type: 'info',
+                    title: '检查更新',
+                    message: "发现新版本，是否更新？",
+                    buttons: ['是', '否'],
+                    icon: image
                 }
-            })
-        } else {
-            const options = {
-                type: 'info',
-                title: '检查更新',
-                message: "当前为最新版本",
-                buttons: ['确认'],
-                icon: image
+                dialog.showMessageBox(options, function(index) {
+                    if (index == 0) {
+                        shell.openExternal('https://github.com/cteamx/Thief/releases')
+                    }
+                })
+            } else {
+                const options = {
+                    type: 'info',
+                    title: '检查更新',
+                    message: "当前为最新版本",
+                    buttons: ['确认'],
+                    icon: image
+                }
+                dialog.showMessageBox(options)
             }
-            dialog.showMessageBox(options)
-        }
-    })
+        })
+        .catch(err => {
+            console.error('Failed to check for updates:', err);
+        });
 }
 
 function Exit() {

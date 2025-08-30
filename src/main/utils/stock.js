@@ -1,5 +1,5 @@
 'use strict';
-var rp = require('request-promise');
+import axios from 'axios';
 const request = require('superagent')
 require('superagent-charset')(request)
 // const url = 'http://hq.sinajs.cn/list=';
