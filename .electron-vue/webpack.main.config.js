@@ -32,17 +32,16 @@ let mainConfig = {
   },
   output: {
     filename: '[name].js',
-    library: {
-      type: 'commonjs2'
-    },
+    libraryTarget: 'commonjs2',
     path: path.join(__dirname, '../dist/electron')
   },
-  plugins: [],
+  plugins: [
+    new webpack.NoEmitOnErrorsPlugin()
+  ],
   resolve: {
     extensions: ['.js', '.json', '.node']
   },
-  target: 'electron-main',
-  mode: process.env.NODE_ENV === 'production' ? 'production' : 'development'
+  target: 'electron-main'
 }
 
 /**

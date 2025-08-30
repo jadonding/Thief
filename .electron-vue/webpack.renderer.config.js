@@ -21,7 +21,7 @@ const { VueLoaderPlugin } = require('vue-loader')
 let whiteListedModules = ['vue', 'element-ui']
 
 let rendererConfig = {
-  devtool: 'eval-cheap-module-source-map',
+  devtool: '#cheap-module-eval-source-map',
   entry: {
     renderer: path.join(__dirname, '../src/renderer/main.js'),
     'pdf.worker': 'pdfjs-dist/build/pdf.worker.entry',
@@ -62,42 +62,44 @@ let rendererConfig = {
       },
       {
         test: /\.vue$/,
-        loader: 'vue-loader'
+        use: {
+          loader: 'vue-loader',
+          options: {
+            extractCSS: process.env.NODE_ENV === 'production',
+            loaders: {
+              sass: 'vue-style-loader!css-loader!sass-loader?indentedSyntax=1',
+              scss: 'vue-style-loader!css-loader!sass-loader',
+              less: 'vue-style-loader!css-loader!less-loader'
+            }
+          }
+        }
       },
       {
         test: /\.(png|jpe?g|gif|svg)(\?.*)?$/,
-        type: 'asset',
-        parser: {
-          dataUrlCondition: {
-            maxSize: 10000
+        use: {
+          loader: 'url-loader',
+          query: {
+            limit: 10000,
+            name: 'imgs/[name]--[folder].[ext]'
           }
-        },
-        generator: {
-          filename: 'imgs/[name]--[folder][ext]'
         }
       },
       {
         test: /\.(mp4|webm|ogg|mp3|wav|flac|aac)(\?.*)?$/,
-        type: 'asset',
-        parser: {
-          dataUrlCondition: {
-            maxSize: 10000
-          }
-        },
-        generator: {
-          filename: 'media/[name]--[folder][ext]'
+        loader: 'url-loader',
+        options: {
+          limit: 10000,
+          name: 'media/[name]--[folder].[ext]'
         }
       },
       {
         test: /\.(woff2?|eot|ttf|otf)(\?.*)?$/,
-        type: 'asset',
-        parser: {
-          dataUrlCondition: {
-            maxSize: 10000
+        use: {
+          loader: 'url-loader',
+          query: {
+            limit: 10000,
+            name: 'fonts/[name]--[folder].[ext]'
           }
-        },
-        generator: {
-          filename: 'fonts/[name]--[folder][ext]'
         }
       }
     ]
@@ -130,13 +132,13 @@ let rendererConfig = {
         removeComments: true
       },
       nodeModules: false
-    })
+    }),
+    new webpack.HotModuleReplacementPlugin(),
+    new webpack.NoEmitOnErrorsPlugin()
   ],
   output: {
     filename: '[name].js',
-    library: {
-      type: 'commonjs2'
-    },
+    libraryTarget: 'commonjs2',
     path: path.join(__dirname, '../dist/electron')
   },
   resolve: {
@@ -146,8 +148,7 @@ let rendererConfig = {
     },
     extensions: ['.js', '.vue', '.json', '.css', '.node']
   },
-  target: 'electron-renderer',
-  mode: process.env.NODE_ENV === 'production' ? 'production' : 'development'
+  target: 'electron-renderer'
 }
 
 /**
@@ -181,6 +182,9 @@ if (process.env.NODE_ENV === 'production') {
     }),
     new webpack.DefinePlugin({
       'process.env.NODE_ENV': '"production"'
+    }),
+    new webpack.LoaderOptionsPlugin({
+      minimize: true
     })
   )
 }
