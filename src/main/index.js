@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, shell, dialog, nativeImage, TouchBar } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import { pathToFileURL } from 'url'
 import db from './utils/db'
 import book from './utils/book'
 import osUtil from './utils/osUtil'
@@ -93,29 +94,40 @@ const isDev = process.env.NODE_ENV === 'development'
 
 const isMac = 'darwin' === process.platform;
 
-const soURL = process.env.NODE_ENV === 'development' ?
-    `http://localhost:9080/#/so` :
-    `file://${__dirname}/index.html#so`
+function resolveRendererURL(routePath) {
+    if (isDev) {
+        return `http://localhost:9080/#/${routePath}`
+    }
 
-const settingURL = process.env.NODE_ENV === 'development' ?
-    `http://localhost:9080/#/setting` :
-    `file://${__dirname}/index.html#setting`
+    const candidates = [
+        path.resolve(__dirname || '.', 'index.html'),
+        path.join(process.resourcesPath || '', 'app.asar', 'dist', 'electron', 'index.html'),
+        path.join(process.resourcesPath || '', 'app', 'dist', 'electron', 'index.html'),
+        path.join(process.cwd(), 'dist', 'electron', 'index.html')
+    ]
 
-const desktopURL = process.env.NODE_ENV === 'development' ?
-    `http://localhost:9080/#/desktop` :
-    `file://${__dirname}/index.html#desktop`
+    for (const filePath of candidates) {
+        try {
+            if (filePath && fs.existsSync(filePath)) {
+                return `${pathToFileURL(filePath).toString()}#/${routePath}`
+            }
+        } catch (_) {}
+    }
 
-const webURL = process.env.NODE_ENV === 'development' ?
-    `http://localhost:9080/#/web` :
-    `file://${__dirname}/index.html#web`
+    return `file://${path.resolve('index.html')}#/${routePath}`
+}
 
-const videoURL = process.env.NODE_ENV === 'development' ?
-    `http://localhost:9080/#/video` :
-    `file://${__dirname}/index.html#video`
+const soURL = resolveRendererURL('so')
 
-const pdfURL = process.env.NODE_ENV === 'development' ?
-    `http://localhost:9080/#/pdf` :
-    `file://${__dirname}/index.html#pdf`
+const settingURL = resolveRendererURL('setting')
+
+const desktopURL = resolveRendererURL('desktop')
+
+const webURL = resolveRendererURL('web')
+
+const videoURL = resolveRendererURL('video')
+
+const pdfURL = resolveRendererURL('pdf')
 
 function resolveStaticAsset(fileName) {
     const candidates = [
@@ -185,7 +197,8 @@ function normalizeAccelerator(value) {
 }
 
 function attachWindowDebug(windowName, win) {
-    if (process.env.NODE_ENV !== 'development' || !win || !win.webContents) {
+    const debugEnabled = process.env.NODE_ENV === 'development' || process.env.THIEF_DEBUG === '1'
+    if (!debugEnabled || !win || !win.webContents) {
         return
     }
 
@@ -465,6 +478,9 @@ function createWindownSetting() {
     })
 
     settingWindow.loadURL(settingURL)
+    if (process.env.THIEF_DEBUG === '1') {
+        settingWindow.webContents.openDevTools({ mode: 'detach' })
+    }
 
     settingWindow.on('closed', () => {
         settingWindow = null
@@ -1453,6 +1469,24 @@ ipcMain.on('get_stock_cache_info', (event) => {
             success: false,
             message: error.message
         });
+    }
+});
+
+ipcMain.handle('search_stock_codes', async (_event, query) => {
+    try {
+        await stock.initializeStockCache();
+        const data = stock.searchStocks(typeof query === 'string' ? query : '');
+        return {
+            success: true,
+            data
+        };
+    } catch (error) {
+        console.error('search_stock_codes failed:', error);
+        return {
+            success: false,
+            data: [],
+            message: error.message
+        };
     }
 });
 

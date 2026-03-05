@@ -247,7 +247,6 @@ import db from "../../main/utils/db";
 import dialog from "../utils/dialog";
 import { ipcRenderer, shell } from "electron";
 import hotkeys from "hotkeys-js";
-import stockUtils from "../../main/utils/stock";
 
 export default {
   name: "setting", data() {
@@ -331,7 +330,22 @@ export default {
         code: ""
       };
     },
-    updateStockCodeFromInput(index) {
+    async searchStocksFromMain(query) {
+      const q = typeof query === "string" ? query.trim() : "";
+      if (!q) {
+        return [];
+      }
+      try {
+        const response = await ipcRenderer.invoke("search_stock_codes", q);
+        if (response && response.success && Array.isArray(response.data)) {
+          return response.data;
+        }
+      } catch (error) {
+        console.error("search_stock_codes invoke failed:", error);
+      }
+      return [];
+    },
+    async updateStockCodeFromInput(index) {
       const inputValue = this.stockDisplay[index] ? this.stockDisplay[index].trim() : "";
 
       // 确保 stock_code[index] 存在且为对象
@@ -346,18 +360,11 @@ export default {
         return;
       }
 
-      // 首先确保股票缓存已初始化
-      if (!stockUtils.isStockCacheInitialized) {
-        stockUtils.initializeStockCache().then(() => {
-          this.performStockSearch(index, inputValue);
-        });
-      } else {
-        this.performStockSearch(index, inputValue);
-      }
+      const results = await this.searchStocksFromMain(inputValue);
+      this.performStockSearch(index, inputValue, results);
     },
 
-    performStockSearch(index, inputValue) {
-      const results = stockUtils.searchStocks(inputValue);
+    performStockSearch(index, inputValue, results = []) {
       let matchedStock = null;
 
       if (results && results.length > 0) {
@@ -668,12 +675,7 @@ export default {
           return;
         }
         
-        // 确保股票工具已初始化
-        if (!stockUtils.isStockCacheInitialized) {
-          await stockUtils.initializeStockCache();
-        }
-        
-        const results = stockUtils.searchStocks(queryString.trim());
+        const results = await this.searchStocksFromMain(queryString.trim());
         
         // 格式化结果以适应el-autocomplete的显示要求
         const formattedResults = results.map(stock => ({
