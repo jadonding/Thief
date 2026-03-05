@@ -4,6 +4,7 @@ import book from './utils/book'
 import osUtil from './utils/osUtil'
 import stock from './utils/stock'
 import ad from './utils/ad'
+import stockMonitor from './utils/stockMonitor'
 import request from 'request'
 
 const { TouchBarButton, TouchBarSpacer } = TouchBar
@@ -114,8 +115,24 @@ const pdfURL = process.env.NODE_ENV === 'development' ?
 function init() {
     Menu.setApplicationMenu(null);
 
+    // 初始化临时配置
     db.set("auto_page", "0");
     db.set("is_mouse", "0");
+
+    // 初始化股票数据缓存
+    (async () => {
+        try {
+            await stock.initializeStockCache();
+            console.log('股票数据缓存初始化完成');
+        } catch (error) {
+            console.error('股票数据缓存初始化失败:', error);
+        }
+    })();
+
+    // 启动股票监控
+    if (db.get("limit_up_alert_enabled")) {
+        stockMonitor.startMonitoring();
+    }
 
     if (isMac) {
         createSetting();
@@ -310,9 +327,9 @@ function createWindownSetting() {
     settingWindow = new BrowserWindow({
         title: '设 置',
         useContentSize: true,
-        width: 715,
-        height: 630,
-        resizable: false,
+        width: 780,
+        height: 680,
+        resizable: true,
         maximizable: false,
         minimizable: false,
         webPreferences: {
@@ -494,12 +511,11 @@ function AutoStock() {
 
     if (display_model === '2') {
         clearInterval(autoStockTime);
-
         autoStockTime = setInterval(function() {
             stock.getData(display_shares_list, function(text) {
                 updateText(text);
             })
-        }, parseInt(5) * 1000);
+        }, 500);
     } else {
         clearInterval(autoStockTime);
     }
@@ -1067,16 +1083,40 @@ function createSetting() {
 }
 
 ipcMain.on('bg_text_color', function() {
+    console.log('主进程收到bg_text_color事件');
+    
+    // 读取最新的颜色配置
+    const colorConfig = {
+        bg_color: db.get("bg_color"),
+        txt_color: db.get("txt_color"),
+        font_size: db.get("font_size")
+    };
+    
+    console.log('读取到的最新颜色配置:', colorConfig);
+    
     tray.destroy();
     createKey();
     createTray();
 
+    // 重新启动或停止股票监控
+    if (db.get("limit_up_alert_enabled")) {
+        stockMonitor.startMonitoring();
+    } else {
+        stockMonitor.stopMonitoring();
+    }
+
     if (desktopWindow != null) {
-        desktopWindow.webContents.send('bg_text_color', 'ping');
+        console.log('向desktopWindow发送bg_text_color消息，携带颜色配置');
+        desktopWindow.webContents.send('bg_text_color', colorConfig);
+    } else {
+        console.log('desktopWindow为null，无法发送消息');
     }
 
     if (desktopBarWindow != null) {
-        desktopBarWindow.webContents.send('bg_text_color', 'ping');
+        console.log('向desktopBarWindow发送bg_text_color消息，携带颜色配置');
+        desktopBarWindow.webContents.send('bg_text_color', colorConfig);
+    } else {
+        console.log('desktopBarWindow为null，无法发送消息');
     }
 })
 
@@ -1203,6 +1243,63 @@ ipcMain.on('videoOpacity', function(e, v) {
     }
 })
 
+// 配置导入导出处理
+ipcMain.on('export-config', (event, path) => {
+    const result = db.exportConfig(path);
+    event.sender.send('export-config-result', result);
+});
+
+ipcMain.on('import-config', (event, path) => {
+    const result = db.importConfig(path);
+    event.sender.send('import-config-result', result);
+});
+
+// 处理股票监控更新
+ipcMain.on('update_stock_monitor', (event, enabled) => {
+    console.log('更新股票监控状态:', enabled);
+    
+    // 使用重启方法来确保配置更新
+    stockMonitor.restartMonitoring();
+});
+
+// 处理股票数据刷新
+ipcMain.on('refresh_stock_data', async (event) => {
+    try {
+        console.log('开始刷新股票数据...');
+        const count = await stock.refreshStockData();
+        event.sender.send('refresh_stock_data_result', {
+            success: true,
+            count: count,
+            message: `成功获取 ${count} 条股票数据`
+        });
+    } catch (error) {
+        console.error('刷新股票数据失败:', error);
+        event.sender.send('refresh_stock_data_result', {
+            success: false,
+            message: `刷新失败: ${error.message}`
+        });
+    }
+});
+
+// 获取股票缓存信息
+ipcMain.on('get_stock_cache_info', (event) => {
+    try {
+        const info = stock.getStockCacheInfo();
+        event.sender.send('get_stock_cache_info_result', {
+            success: true,
+            data: info
+        });
+    } catch (error) {
+        console.error('获取股票缓存信息失败:', error);
+        event.sender.send('get_stock_cache_info_result', {
+            success: false,
+            message: error.message
+        });
+    }
+});
+
+
+
 // const shouldQuit = app.makeSingleInstance((commandLine, workingDirectory) => {
 //   // Someone tried to run a second instance, we should focus our window.
 //   if (desktopWindow) {
@@ -1215,14 +1312,25 @@ ipcMain.on('videoOpacity', function(e, v) {
 //   app.quit()
 // }
 
+// 应用启动时初始化
 app.on('ready', init)
 
 app.on('window-all-closed', () => {
-    db.set("auto_page", "0");
-    db.set("is_mouse", "0");
+    try {
+        // 重置临时配置
+        db.set("auto_page", "0");
+        db.set("is_mouse", "0");
 
-    if (isMac) {
-        db.set("curr_model", "1")
+        if (isMac) {
+            db.set("curr_model", "1");
+        }
+        
+        // 确保配置变更被保存并备份
+        db.createBackup();
+        
+        console.log('Configuration saved successfully before exit');
+    } catch (err) {
+        console.error('Error saving configuration on exit:', err);
     }
 
     if (process.platform !== 'darwin') {
