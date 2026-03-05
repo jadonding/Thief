@@ -9,7 +9,7 @@ export default {
      * @param {Array} atMobiles 要@的手机号列表
      */
     async sendMessage(text, atMobiles = []) {
-        const webhook = db.get("dingtalk_webhook");
+        const webhook = await db.get("dingtalk_webhook");
         if (!webhook) {
             console.log("钉钉Webhook地址未配置");
             return;
@@ -48,7 +48,7 @@ export default {
      * @param {string} alertType 告警类型
      */
     async sendLimitUpAlert(stockInfo, alertType) {
-        const atPhones = db.get("at_phone_numbers") || [];
+        const atPhones = await db.get("at_phone_numbers") || [];
         
         let message = "";
         const currentTime = new Date().toLocaleString('zh-CN');

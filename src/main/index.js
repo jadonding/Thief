@@ -1,13 +1,17 @@
 import { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, shell, dialog, nativeImage, TouchBar } from 'electron'
+import path from 'path'
+import fs from 'fs'
 import db from './utils/db'
 import book from './utils/book'
 import osUtil from './utils/osUtil'
 import stock from './utils/stock'
 import ad from './utils/ad'
 import stockMonitor from './utils/stockMonitor'
-import request from 'request'
+import axios from 'axios'
+const remoteMain = require('@electron/remote/main')
 
 const { TouchBarButton, TouchBarSpacer } = TouchBar
+const APP_USER_MODEL_ID = 'c.team.thief'
 
 let touchBarText = null;
 
@@ -85,6 +89,7 @@ let desktopBarWindow;
 let webWindow;
 let videoWindow;
 let pdfWindow;
+const isDev = process.env.NODE_ENV === 'development'
 
 const isMac = 'darwin' === process.platform;
 
@@ -112,7 +117,122 @@ const pdfURL = process.env.NODE_ENV === 'development' ?
     `http://localhost:9080/#/pdf` :
     `file://${__dirname}/index.html#pdf`
 
-function init() {
+function resolveStaticAsset(fileName) {
+    const candidates = [
+        typeof __static !== 'undefined' ? path.join(__static, fileName) : null,
+        path.join(__dirname, 'static', fileName),
+        path.join(process.cwd(), 'static', fileName),
+        path.join(process.resourcesPath || '', 'app', 'dist', 'electron', 'static', fileName),
+        path.join(process.resourcesPath || '', 'app.asar', 'dist', 'electron', 'static', fileName),
+        path.join(process.resourcesPath || '', 'static', fileName)
+    ].filter(Boolean)
+
+    for (const filePath of candidates) {
+        try {
+            if (fs.existsSync(filePath)) {
+                return filePath
+            }
+        } catch (_) {}
+    }
+    return null
+}
+
+function loadAppIconImage() {
+    const iconPath = resolveStaticAsset('icon.png')
+    if (iconPath) {
+        const image = nativeImage.createFromPath(iconPath)
+        if (!image.isEmpty()) {
+            return image
+        }
+    }
+    return nativeImage.createEmpty()
+}
+
+function loadTrayImage() {
+    const trayPath = resolveStaticAsset(process.platform === 'darwin' ? 'mac.png' : 'win.png') || resolveStaticAsset('icon.png')
+    if (trayPath) {
+        const image = nativeImage.createFromPath(trayPath)
+        if (!image.isEmpty()) {
+            return image
+        }
+    }
+    return loadAppIconImage()
+}
+
+function withWindowIcon(options) {
+    const icon = loadAppIconImage()
+    if (!icon.isEmpty()) {
+        return Object.assign({}, options, { icon })
+    }
+    return options
+}
+
+function setTrayTitleSafe(title = '') {
+    if (!tray) {
+        return
+    }
+    try {
+        tray.setTitle(title)
+    } catch (_) {}
+}
+
+function normalizeAccelerator(value) {
+    if (typeof value !== 'string') {
+        return undefined
+    }
+    const x = value.trim()
+    return x.includes('+') ? x : undefined
+}
+
+function attachWindowDebug(windowName, win) {
+    if (process.env.NODE_ENV !== 'development' || !win || !win.webContents) {
+        return
+    }
+
+    win.webContents.on('did-fail-load', (_, errorCode, errorDescription, validatedURL) => {
+        console.error(`[${windowName}] did-fail-load`, { errorCode, errorDescription, validatedURL })
+    })
+
+    win.webContents.on('render-process-gone', (_, details) => {
+        console.error(`[${windowName}] render-process-gone`, details)
+    })
+
+    win.webContents.on('console-message', (_, level, message, line, sourceId) => {
+        console.log(`[${windowName}] console-message`, { level, message, line, sourceId })
+    })
+}
+
+function lockWebContentsZoom(webContents, windowName) {
+    if (!webContents) {
+        return
+    }
+
+    try {
+        if (typeof webContents.setZoomFactor === 'function') {
+            webContents.setZoomFactor(1)
+        }
+        if (typeof webContents.setVisualZoomLevelLimits === 'function') {
+            webContents.setVisualZoomLevelLimits(1, 1)
+        }
+        if (typeof webContents.setLayoutZoomLevelLimits === 'function') {
+            webContents.setLayoutZoomLevelLimits(0, 0)
+        } else if (isDev) {
+            console.log(`[${windowName}] setLayoutZoomLevelLimits is unavailable on this Electron version`)
+        }
+    } catch (error) {
+        console.error(`[${windowName}] lock zoom failed`, error)
+    }
+}
+
+async function init() {
+    remoteMain.initialize()
+    if (process.platform === 'win32') {
+        app.setAppUserModelId(APP_USER_MODEL_ID)
+    }
+    app.on('browser-window-created', (_, window) => {
+        remoteMain.enable(window.webContents)
+    })
+
     Menu.setApplicationMenu(null);
 
     // 初始化临时配置
@@ -130,20 +250,20 @@ function init() {
     })();
 
     // 启动股票监控
-    if (db.get("limit_up_alert_enabled")) {
+    if (await db.get("limit_up_alert_enabled")) {
         stockMonitor.startMonitoring();
     }
 
     if (isMac) {
         createSetting();
 
-        if (db.get('curr_model') === '2') {
+        if (await db.get('curr_model') === '2') {
             createWindownDesktop();
 
             setTimeout(() => {
                 BossKey(1);
             }, 1000);
-        } else if (db.get('curr_model') === '3') {
+        } else if (await db.get('curr_model') === '3') {
             db.set("curr_model", "1")
         }
     } else {
@@ -167,7 +287,7 @@ function createVideo() {
         frame = false;
     }
 
-    videoWindow = new BrowserWindow({
+    videoWindow = new BrowserWindow(withWindowIcon({
         useContentSize: true,
         width: 478,
         height: 28,
@@ -177,15 +297,15 @@ function createVideo() {
         resizable: true,
         frame: frame,
         webPreferences: {
-            nodeIntegration: true
+            nodeIntegration: true,
+            contextIsolation: false
         },
-    })
+    }))
 
     let webContents = videoWindow.webContents;
+    attachWindowDebug('videoWindow', videoWindow)
     webContents.on('did-finish-load', () => {
-        webContents.setZoomFactor(1);
-        webContents.setVisualZoomLevelLimits(1, 1);
-        webContents.setLayoutZoomLevelLimits(0, 0);
+        lockWebContentsZoom(webContents, 'videoWindow')
     })
 
     videoWindow.loadURL(videoURL)
@@ -193,7 +313,7 @@ function createVideo() {
     videoWindow.setOpacity(1.0)
 
     videoWindow.setAlwaysOnTop(true);
-    videoWindow.setSkipTaskbar(true);
+    videoWindow.setSkipTaskbar(!isDev);
 
     videoWindow.on('closed', () => {
         videoWindow = null
@@ -210,7 +330,7 @@ function createPdf() {
         frame = false;
     }
 
-    pdfWindow = new BrowserWindow({
+    pdfWindow = new BrowserWindow(withWindowIcon({
         useContentSize: true,
         width: 478,
         height: 28,
@@ -220,15 +340,15 @@ function createPdf() {
         resizable: true,
         frame: frame,
         webPreferences: {
-            nodeIntegration: true
+            nodeIntegration: true,
+            contextIsolation: false
         },
-    })
+    }))
 
     let webContents = pdfWindow.webContents;
+    attachWindowDebug('pdfWindow', pdfWindow)
     webContents.on('did-finish-load', () => {
-        webContents.setZoomFactor(1);
-        webContents.setVisualZoomLevelLimits(1, 1);
-        webContents.setLayoutZoomLevelLimits(0, 0);
+        lockWebContentsZoom(webContents, 'pdfWindow')
     })
 
     pdfWindow.loadURL(pdfURL)
@@ -236,7 +356,7 @@ function createPdf() {
     pdfWindow.setOpacity(1.0)
 
     pdfWindow.setAlwaysOnTop(true);
-    pdfWindow.setSkipTaskbar(true);
+    pdfWindow.setSkipTaskbar(!isDev);
 
     pdfWindow.on('closed', () => {
         pdfWindow = null
@@ -253,7 +373,7 @@ function createWeb() {
         frame = false;
     }
 
-    webWindow = new BrowserWindow({
+    webWindow = new BrowserWindow(withWindowIcon({
         useContentSize: true,
         width: 478,
         height: 28,
@@ -264,15 +384,15 @@ function createWeb() {
         frame: frame,
         webPreferences: {
             nodeIntegration: true,
+            contextIsolation: false,
             webviewTag: true
         },
-    })
+    }))
 
     let webContents = webWindow.webContents;
+    attachWindowDebug('webWindow', webWindow)
     webContents.on('did-finish-load', () => {
-        webContents.setZoomFactor(1);
-        webContents.setVisualZoomLevelLimits(1, 1);
-        webContents.setLayoutZoomLevelLimits(0, 0);
+        lockWebContentsZoom(webContents, 'webWindow')
     })
 
     webWindow.loadURL(webURL)
@@ -280,7 +400,7 @@ function createWeb() {
     webWindow.setOpacity(1.0)
 
     webWindow.setAlwaysOnTop(true);
-    webWindow.setSkipTaskbar(true);
+    webWindow.setSkipTaskbar(!isDev);
 
     webWindow.on('closed', () => {
         webWindow = null
@@ -292,7 +412,7 @@ function createSoSetting() {
      * Initial window options
      */
 
-    soWindow = new BrowserWindow({
+    soWindow = new BrowserWindow(withWindowIcon({
         title: '搜 索',
         useContentSize: true,
         width: 334,
@@ -302,14 +422,14 @@ function createSoSetting() {
         minimizable: false,
         webPreferences: {
             nodeIntegration: true,
+            contextIsolation: false,
         },
-    })
+    }))
 
     let webContents = soWindow.webContents;
+    attachWindowDebug('soWindow', soWindow)
     webContents.on('did-finish-load', () => {
-        webContents.setZoomFactor(1);
-        webContents.setVisualZoomLevelLimits(1, 1);
-        webContents.setLayoutZoomLevelLimits(0, 0);
+        lockWebContentsZoom(webContents, 'soWindow')
     })
 
     soWindow.loadURL(soURL)
@@ -324,7 +444,7 @@ function createWindownSetting() {
     /**
      * Initial window options
      */
-    settingWindow = new BrowserWindow({
+    settingWindow = new BrowserWindow(withWindowIcon({
         title: '设 置',
         useContentSize: true,
         width: 780,
@@ -334,14 +454,14 @@ function createWindownSetting() {
         minimizable: false,
         webPreferences: {
             nodeIntegration: true,
+            contextIsolation: false,
         },
-    })
+    }))
 
     let webContents = settingWindow.webContents;
+    attachWindowDebug('settingWindow', settingWindow)
     webContents.on('did-finish-load', () => {
-        webContents.setZoomFactor(1);
-        webContents.setVisualZoomLevelLimits(1, 1);
-        webContents.setLayoutZoomLevelLimits(0, 0);
+        lockWebContentsZoom(webContents, 'settingWindow')
     })
 
     settingWindow.loadURL(settingURL)
@@ -351,7 +471,7 @@ function createWindownSetting() {
     })
 }
 
-function createWindownDesktop() {
+async function createWindownDesktop() {
     /**
      * Initial window options
      */
@@ -361,8 +481,8 @@ function createWindownDesktop() {
     var x = 356;
     var y = 429;
 
-    var desktop_wh = db.get('desktop_wh');
-    var desktop_wz = db.get('desktop_wz');
+    var desktop_wh = await db.get('desktop_wh');
+    var desktop_wz = await db.get('desktop_wz');
 
     var arr_wh = desktop_wh.split(",");
     var arr_wz = desktop_wz.split(",");
@@ -377,7 +497,7 @@ function createWindownDesktop() {
         y = parseInt(arr_wz[0]);
     }
 
-    desktopWindow = new BrowserWindow({
+    desktopWindow = new BrowserWindow(withWindowIcon({
         useContentSize: true,
         width: width,
         height: height,
@@ -389,14 +509,14 @@ function createWindownDesktop() {
         x: y,
         webPreferences: {
             nodeIntegration: true,
+            contextIsolation: false,
         },
-    })
+    }))
 
     let webContents = desktopWindow.webContents;
+    attachWindowDebug('desktopWindow', desktopWindow)
     webContents.on('did-finish-load', () => {
-        webContents.setZoomFactor(1);
-        webContents.setVisualZoomLevelLimits(1, 1);
-        webContents.setLayoutZoomLevelLimits(0, 0);
+        lockWebContentsZoom(webContents, 'desktopWindow')
     })
 
     desktopWindow.loadURL(desktopURL)
@@ -426,7 +546,7 @@ function createWindownBarDesktop() {
     /**
      * Initial window options
      */
-    desktopBarWindow = new BrowserWindow({
+    desktopBarWindow = new BrowserWindow(withWindowIcon({
         useContentSize: true,
         width: 88,
         height: 23,
@@ -435,19 +555,19 @@ function createWindownBarDesktop() {
         transparent: true,
         webPreferences: {
             nodeIntegration: true,
+            contextIsolation: false,
         },
         // maximizable: false
         // y: 600,
         // x: 300
-    })
+    }))
 
     desktopBarWindow.setTouchBar(createTouchBarText())
 
     let webContents = desktopBarWindow.webContents;
+    attachWindowDebug('desktopBarWindow', desktopBarWindow)
     webContents.on('did-finish-load', () => {
-        webContents.setZoomFactor(1);
-        webContents.setVisualZoomLevelLimits(1, 1);
-        webContents.setLayoutZoomLevelLimits(0, 0);
+        lockWebContentsZoom(webContents, 'desktopBarWindow')
     })
 
     desktopBarWindow.loadURL(desktopURL)
@@ -468,7 +588,14 @@ function setText(text) {
     }
 }
 
-function MouseModel(e) {
+function sendDesktopText(message = 'ping') {
+    if (desktopWindow != null && desktopWindow.webContents) {
+        const text = global.text && typeof global.text.text !== 'undefined' ? global.text.text : ''
+        desktopWindow.webContents.send('text', { message, text })
+    }
+}
+
+async function MouseModel(e) {
     if (desktopWindow != null) {
         if (e.checked == true) {
             db.set("is_mouse", "1")
@@ -478,25 +605,25 @@ function MouseModel(e) {
 
         desktopWindow.reload();
 
-        setTimeout(() => {
-            let text = db.get('moyu_text');
+        setTimeout(async () => {
+            let text = await db.get('moyu_text');
             setText(text);
-            desktopWindow.webContents.send('text', 'boss');
+            sendDesktopText('boss');
         }, 2000);
     }
 }
 
 let autoPageTime;
 
-function AutoPage() {
-    if (db.get('auto_page') === '1') {
+async function AutoPage() {
+    if (await db.get('auto_page') === '1') {
         clearInterval(autoPageTime);
         db.set("auto_page", "0")
-        var second = db.get('second');
+        var second = await db.get('second');
         autoPageTime = setInterval(function() {
             NextPage();
         }, parseInt(second) * 1000);
-    } else if (db.get('auto_page') === '0') {
+    } else if (await db.get('auto_page') === '0') {
         db.set("auto_page", "1")
         clearInterval(autoPageTime);
     }
@@ -504,10 +631,10 @@ function AutoPage() {
 
 let autoStockTime;
 
-function AutoStock() {
+async function AutoStock() {
     // debugger;
-    let display_model = db.get('display_model');
-    let display_shares_list = db.get('display_shares_list');
+    let display_model = await db.get('display_model');
+    let display_shares_list = await db.get('display_shares_list');
 
     if (display_model === '2') {
         clearInterval(autoStockTime);
@@ -521,18 +648,18 @@ function AutoStock() {
     }
 }
 
-function updateText(text) {
-    let curr_model = db.get('curr_model');
+async function updateText(text) {
+    let curr_model = await db.get('curr_model');
     if (curr_model === '1') {
-        tray.setTitle(text);
+        setTrayTitleSafe(text);
     } else if (curr_model === '2') {
-        tray.setTitle("");
+        setTrayTitleSafe("");
         setText(text);
         if (desktopWindow != null) {
-            desktopWindow.webContents.send('text', 'ping');
+            sendDesktopText('ping');
         }
     } else if (curr_model === '3') {
-        tray.setTitle("");
+        setTrayTitleSafe("");
 
         if (desktopBarWindow != null) {
             setText(osUtil.getCpu());
@@ -543,9 +670,9 @@ function updateText(text) {
     }
 }
 
-function NextPage() {
-    let display_model = db.get('display_model');
-    let display_shares_list = db.get('display_shares_list');
+async function NextPage() {
+    let display_model = await db.get('display_model');
+    let display_shares_list = await db.get('display_shares_list');
 
     if (display_model === '2') {
         stock.getData(display_shares_list, function(text) {
@@ -557,9 +684,9 @@ function NextPage() {
     }
 }
 
-function PreviousPage() {
-    let display_model = db.get('display_model');
-    let display_shares_list = db.get('display_shares_list');
+async function PreviousPage() {
+    let display_model = await db.get('display_model');
+    let display_shares_list = await db.get('display_shares_list');
 
     if (display_model === '2') {
         stock.getData(display_shares_list, function(text) {
@@ -571,18 +698,18 @@ function PreviousPage() {
     }
 }
 
-function BossKey(type) {
-    let text = db.get('moyu_text');
-    let curr_model = db.get('curr_model');
-    let is_ad = db.get('is_ad');
+async function BossKey(type) {
+    let text = await db.get('moyu_text');
+    let curr_model = await db.get('curr_model');
+    let is_ad = await db.get('is_ad');
 
     if (curr_model === '1') {
         if (is_ad === "") {
             ad.getAd(function(x) {
                 if (x === "err") {
-                    tray.setTitle(text);
+                    setTrayTitleSafe(text);
                 } else {
-                    tray.setTitle(x);
+                    setTrayTitleSafe(x);
                     var timex = new Date().getTime()
                     db.set("is_ad", timex);
                 }
@@ -592,27 +719,30 @@ function BossKey(type) {
             if (timex - is_ad >= 28800000) {
                 ad.getAd(function(x) {
                     if (x === "err") {
-                        tray.setTitle(text);
+                        setTrayTitleSafe(text);
                     } else {
-                        tray.setTitle(x);
+                        setTrayTitleSafe(x);
                         var timex = new Date().getTime()
                         db.set("is_ad", timex);
                     }
                 })
             } else {
-                tray.setTitle(text);
+                setTrayTitleSafe(text);
             }
         }
 
     } else if (curr_model === '2') {
-        tray.setTitle("");
+        setTrayTitleSafe("");
+        setText(text);
 
         if (is_ad === "") {
             ad.getAd(function(x) {
                 if (x === "err") {
                     setText(text);
+                    sendDesktopText(type === 1 ? 'boss' : 'ping');
                 } else {
                     setText(x);
+                    sendDesktopText(type === 1 ? 'boss' : 'ping');
                     var timex = new Date().getTime()
                     db.set("is_ad", timex);
                 }
@@ -623,20 +753,23 @@ function BossKey(type) {
                 ad.getAd(function(x) {
                     if (x === "err") {
                         setText(text);
+                        sendDesktopText(type === 1 ? 'boss' : 'ping');
                     } else {
                         setText(x);
+                        sendDesktopText(type === 1 ? 'boss' : 'ping');
                         var timex = new Date().getTime()
                         db.set("is_ad", timex);
                     }
                 })
             } else {
                 setText(text);
+                sendDesktopText(type === 1 ? 'boss' : 'ping');
             }
         }
 
         if (desktopWindow != null) {
             if (type === 1) {
-                desktopWindow.webContents.send('text', 'boss');
+                sendDesktopText('boss');
             } else if (type === 2) {
                 {
                     if (desktopWindow.isVisible()) {
@@ -648,7 +781,7 @@ function BossKey(type) {
             }
         }
     } else if (curr_model === '3') {
-        tray.setTitle("");
+        setTrayTitleSafe("");
 
         if (desktopBarWindow != null) {
             setText(osUtil.getCpu());
@@ -691,12 +824,12 @@ function BossKey(type) {
 
 
 function checkUpdate() {
-    request({
-        url: "https://gitee.com/lauix/public_version/raw/master/version.txt",
-        method: "GET"
-    }, function(err, res, body) {
-        const logo = `${__static}/icon.png`;
-        const image = nativeImage.createFromPath(logo)
+    axios.get("https://gitee.com/lauix/public_version/raw/master/version.txt", {
+        timeout: 10000,
+        responseType: 'text'
+    }).then(function(response) {
+        const body = typeof response.data === 'string' ? response.data : String(response.data)
+        const image = loadAppIconImage()
 
         var newVersion = parseFloat(body);
 
@@ -724,6 +857,8 @@ function checkUpdate() {
             }
             dialog.showMessageBox(options)
         }
+    }).catch(function() {
+        // ignore update check errors
     })
 }
 
@@ -736,9 +871,9 @@ var key_nextx = null;
 var key_bossx = null;
 var key_autox = null;
 
-function createKey() {
+async function createKey() {
     try {
-        let xkey_previous = db.get('key_previous');
+        let xkey_previous = await db.get('key_previous');
         // 如果指令有问题，则不注册
         if (!xkey_previous || xkey_previous.indexOf('+') < 0) {
             return
@@ -753,7 +888,7 @@ function createKey() {
             PreviousPage();
         })
 
-        let xkey_next = db.get('key_next');
+        let xkey_next = await db.get('key_next');
         // 如果指令有问题，则不注册
         if (!xkey_next || xkey_next.indexOf('+') < 0) {
             return
@@ -767,7 +902,7 @@ function createKey() {
             NextPage();
         })
 
-        let xkey_boss = db.get('key_boss');
+        let xkey_boss = await db.get('key_boss');
         // 如果指令有问题，则不注册
         if (!xkey_boss || xkey_boss.indexOf('+') < 0) {
             return
@@ -781,7 +916,7 @@ function createKey() {
             BossKey(2);
         })
 
-        let xkey_auto = db.get('key_auto');
+        let xkey_auto = await db.get('key_auto');
         // 如果指令有问题，则不注册
         if (!xkey_auto || xkey_auto.indexOf('+') < 0) {
             return
@@ -795,8 +930,8 @@ function createKey() {
             AutoPage();
         })
     } catch (error) {
-        const logo = `${__static}/icon.png`;
-        const image = nativeImage.createFromPath(logo)
+        console.error('Global shortcut registration failed:', error);
+        const image = loadAppIconImage()
 
         const options = {
             type: 'info',
@@ -811,7 +946,8 @@ function createKey() {
             }
         })
 
-        Exit();
+        // Keep app running even if shortcuts fail to register.
+        // User can still use tray menu to open settings and fix invalid shortcuts.
     }
 
     globalShortcut.register('CommandOrControl+Alt+X', function() {
@@ -819,15 +955,19 @@ function createKey() {
     })
 }
 
-function createTray() {
-    const menubarLogo = process.platform === 'darwin' ? `${__static}/mac.png` : `${__static}/win.png`
+async function createTray() {
+    if (tray) {
+        try {
+            tray.destroy()
+        } catch (_) {}
+        tray = null
+    }
 
     var menuList = [];
     menuList.push({
         label: '关于',
         click() {
-            const logo = `${__static}/icon.png`;
-            const image = nativeImage.createFromPath(logo)
+            const image = loadAppIconImage()
 
             const options = {
                 type: 'info',
@@ -861,7 +1001,7 @@ function createTray() {
         }, {
             label: '任务栏模式',
             type: 'radio',
-            checked: db.get('curr_model') === '1',
+            checked: (await db.get('curr_model')) === '1',
             click() {
                 db.set("curr_model", "1")
 
@@ -878,7 +1018,7 @@ function createTray() {
         }, {
             label: '桌面模式',
             type: 'radio',
-            checked: db.get('curr_model') === '2',
+            checked: (await db.get('curr_model')) === '2',
             click() {
                 db.set("curr_model", "2")
 
@@ -904,7 +1044,7 @@ function createTray() {
         }, {
             label: 'TouchBar模式',
             type: 'radio',
-            checked: db.get('curr_model') === '3',
+            checked: (await db.get('curr_model')) === '3',
             click() {
                 db.set("curr_model", "3")
 
@@ -935,7 +1075,7 @@ function createTray() {
     }, {
         label: '小说摸鱼',
         type: 'radio',
-        checked: db.get('display_model') === '1',
+        checked: (await db.get('display_model')) === '1',
         click() {
             clearInterval(autoStockTime);
             db.set("display_model", "1");
@@ -944,10 +1084,10 @@ function createTray() {
     }, {
         label: '股票摸鱼',
         type: 'radio',
-        checked: db.get('display_model') === '2',
-        click() {
+        checked: (await db.get('display_model')) === '2',
+        click: async () => {
             db.set("display_model", "2");
-            let display_shares_list = db.get('display_shares_list');
+            let display_shares_list = await db.get('display_shares_list');
 
             stock.getData(display_shares_list, function(text) {
                 updateText(text);
@@ -1006,26 +1146,26 @@ function createTray() {
     }, {
         label: '自动翻页',
         type: 'checkbox',
-        accelerator: db.get('key_auto'),
-        checked: db.get('auto_page') === '1',
+        accelerator: normalizeAccelerator(await db.get('key_auto')),
+        checked: (await db.get('auto_page')) === '1',
         click() {
             AutoPage();
         }
     }, {
         label: '上一页',
-        accelerator: db.get('key_previous'),
+        accelerator: normalizeAccelerator(await db.get('key_previous')),
         click() {
             PreviousPage();
         }
     }, {
         label: '下一页',
-        accelerator: db.get('key_next'),
+        accelerator: normalizeAccelerator(await db.get('key_next')),
         click() {
             NextPage();
         }
     }, {
         label: '老板键',
-        accelerator: db.get('key_boss'),
+        accelerator: normalizeAccelerator(await db.get('key_boss')),
         click() {
             BossKey(2);
         }
@@ -1067,10 +1207,23 @@ function createTray() {
         }
     });
 
-
-    // tray = new Tray(nativeImage.createEmpty())
-    tray = new Tray(menubarLogo)
-    tray.setContextMenu(Menu.buildFromTemplate(menuList))
+    try {
+        tray = new Tray(loadTrayImage())
+    } catch (error) {
+        console.error('Failed to create tray with preferred icon:', error)
+        try {
+            tray = new Tray(loadAppIconImage())
+        } catch (fallbackError) {
+            console.error('Failed to create tray with fallback icon:', fallbackError)
+            return
+        }
+    }
+    tray.setToolTip('Thief')
+    try {
+        tray.setContextMenu(Menu.buildFromTemplate(menuList))
+    } catch (error) {
+        console.error('Failed to build tray menu template:', error)
+    }
     BossKey();
 }
 
@@ -1082,24 +1235,29 @@ function createSetting() {
     }
 }
 
-ipcMain.on('bg_text_color', function() {
+ipcMain.on('bg_text_color', async function() {
     console.log('主进程收到bg_text_color事件');
     
     // 读取最新的颜色配置
     const colorConfig = {
-        bg_color: db.get("bg_color"),
-        txt_color: db.get("txt_color"),
-        font_size: db.get("font_size")
+        bg_color: await db.get("bg_color"),
+        txt_color: await db.get("txt_color"),
+        font_size: await db.get("font_size")
     };
     
     console.log('读取到的最新颜色配置:', colorConfig);
     
-    tray.destroy();
-    createKey();
-    createTray();
+    if (tray) {
+        try {
+            tray.destroy()
+        } catch (_) {}
+        tray = null
+    }
+    await createKey();
+    await createTray();
 
     // 重新启动或停止股票监控
-    if (db.get("limit_up_alert_enabled")) {
+    if (await db.get("limit_up_alert_enabled")) {
         stockMonitor.startMonitoring();
     } else {
         stockMonitor.stopMonitoring();
