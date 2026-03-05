@@ -49,7 +49,7 @@ function startRenderer () {
     })
 
     compiler.hooks.compilation.tap('compilation', compilation => {
-      compilation.hooks.htmlWebpackPluginAfterEmit.tapAsync('html-webpack-plugin-after-emit', (data, cb) => {
+      compilation.hooks.processAssets.tapAsync('html-webpack-plugin-after-emit', (assets, cb) => {
         hotMiddleware.publish({ action: 'reload' })
         cb()
       })
@@ -59,21 +59,29 @@ function startRenderer () {
       logStats('Renderer', stats)
     })
 
-    const server = new WebpackDevServer(
-      compiler,
-      {
-        contentBase: path.join(__dirname, '../'),
-        quiet: true,
-        before (app, ctx) {
-          app.use(hotMiddleware)
-          ctx.middleware.waitUntilValid(() => {
-            resolve()
-          })
-        }
+    const server = new WebpackDevServer({
+      port: 9080,
+      hot: true,
+      client: {
+        overlay: false
+      },
+      setupMiddlewares(middlewares, devServer) {
+        middlewares.unshift({
+          name: 'webpack-hot-middleware',
+          path: '/__webpack_hmr',
+          middleware: hotMiddleware
+        });
+        return middlewares;
       }
-    )
+    }, compiler)
 
-    server.listen(9080)
+    server.start()
+      .then(() => {
+        resolve()
+      })
+      .catch(err => {
+        reject(err)
+      })
   })
 }
 
@@ -85,7 +93,6 @@ function startMain () {
 
     compiler.hooks.watchRun.tapAsync('watch-run', (compilation, done) => {
       logStats('Main', chalk.white.bold('compiling...'))
-      hotMiddleware.publish({ action: 'compiling' })
       done()
     })
 

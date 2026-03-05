@@ -112,7 +112,7 @@ const pdfURL = process.env.NODE_ENV === 'development' ?
     `http://localhost:9080/#/pdf` :
     `file://${__dirname}/index.html#pdf`
 
-function init() {
+async function init() {
     Menu.setApplicationMenu(null);
 
     // 初始化临时配置
@@ -130,20 +130,20 @@ function init() {
     })();
 
     // 启动股票监控
-    if (db.get("limit_up_alert_enabled")) {
+    if (await db.get("limit_up_alert_enabled")) {
         stockMonitor.startMonitoring();
     }
 
     if (isMac) {
         createSetting();
 
-        if (db.get('curr_model') === '2') {
+        if (await db.get('curr_model') === '2') {
             createWindownDesktop();
 
             setTimeout(() => {
                 BossKey(1);
             }, 1000);
-        } else if (db.get('curr_model') === '3') {
+        } else if (await db.get('curr_model') === '3') {
             db.set("curr_model", "1")
         }
     } else {
@@ -351,7 +351,7 @@ function createWindownSetting() {
     })
 }
 
-function createWindownDesktop() {
+async function createWindownDesktop() {
     /**
      * Initial window options
      */
@@ -361,8 +361,8 @@ function createWindownDesktop() {
     var x = 356;
     var y = 429;
 
-    var desktop_wh = db.get('desktop_wh');
-    var desktop_wz = db.get('desktop_wz');
+    var desktop_wh = await db.get('desktop_wh');
+    var desktop_wz = await db.get('desktop_wz');
 
     var arr_wh = desktop_wh.split(",");
     var arr_wz = desktop_wz.split(",");
@@ -468,7 +468,7 @@ function setText(text) {
     }
 }
 
-function MouseModel(e) {
+async function MouseModel(e) {
     if (desktopWindow != null) {
         if (e.checked == true) {
             db.set("is_mouse", "1")
@@ -478,8 +478,8 @@ function MouseModel(e) {
 
         desktopWindow.reload();
 
-        setTimeout(() => {
-            let text = db.get('moyu_text');
+        setTimeout(async () => {
+            let text = await db.get('moyu_text');
             setText(text);
             desktopWindow.webContents.send('text', 'boss');
         }, 2000);
@@ -488,15 +488,15 @@ function MouseModel(e) {
 
 let autoPageTime;
 
-function AutoPage() {
-    if (db.get('auto_page') === '1') {
+async function AutoPage() {
+    if (await db.get('auto_page') === '1') {
         clearInterval(autoPageTime);
         db.set("auto_page", "0")
-        var second = db.get('second');
+        var second = await db.get('second');
         autoPageTime = setInterval(function() {
             NextPage();
         }, parseInt(second) * 1000);
-    } else if (db.get('auto_page') === '0') {
+    } else if (await db.get('auto_page') === '0') {
         db.set("auto_page", "1")
         clearInterval(autoPageTime);
     }
@@ -504,10 +504,10 @@ function AutoPage() {
 
 let autoStockTime;
 
-function AutoStock() {
+async function AutoStock() {
     // debugger;
-    let display_model = db.get('display_model');
-    let display_shares_list = db.get('display_shares_list');
+    let display_model = await db.get('display_model');
+    let display_shares_list = await db.get('display_shares_list');
 
     if (display_model === '2') {
         clearInterval(autoStockTime);
@@ -521,8 +521,8 @@ function AutoStock() {
     }
 }
 
-function updateText(text) {
-    let curr_model = db.get('curr_model');
+async function updateText(text) {
+    let curr_model = await db.get('curr_model');
     if (curr_model === '1') {
         tray.setTitle(text);
     } else if (curr_model === '2') {
@@ -543,9 +543,9 @@ function updateText(text) {
     }
 }
 
-function NextPage() {
-    let display_model = db.get('display_model');
-    let display_shares_list = db.get('display_shares_list');
+async function NextPage() {
+    let display_model = await db.get('display_model');
+    let display_shares_list = await db.get('display_shares_list');
 
     if (display_model === '2') {
         stock.getData(display_shares_list, function(text) {
@@ -557,9 +557,9 @@ function NextPage() {
     }
 }
 
-function PreviousPage() {
-    let display_model = db.get('display_model');
-    let display_shares_list = db.get('display_shares_list');
+async function PreviousPage() {
+    let display_model = await db.get('display_model');
+    let display_shares_list = await db.get('display_shares_list');
 
     if (display_model === '2') {
         stock.getData(display_shares_list, function(text) {
@@ -571,10 +571,10 @@ function PreviousPage() {
     }
 }
 
-function BossKey(type) {
-    let text = db.get('moyu_text');
-    let curr_model = db.get('curr_model');
-    let is_ad = db.get('is_ad');
+async function BossKey(type) {
+    let text = await db.get('moyu_text');
+    let curr_model = await db.get('curr_model');
+    let is_ad = await db.get('is_ad');
 
     if (curr_model === '1') {
         if (is_ad === "") {
@@ -736,9 +736,9 @@ var key_nextx = null;
 var key_bossx = null;
 var key_autox = null;
 
-function createKey() {
+async function createKey() {
     try {
-        let xkey_previous = db.get('key_previous');
+        let xkey_previous = await db.get('key_previous');
         // 如果指令有问题，则不注册
         if (!xkey_previous || xkey_previous.indexOf('+') < 0) {
             return
@@ -753,7 +753,7 @@ function createKey() {
             PreviousPage();
         })
 
-        let xkey_next = db.get('key_next');
+        let xkey_next = await db.get('key_next');
         // 如果指令有问题，则不注册
         if (!xkey_next || xkey_next.indexOf('+') < 0) {
             return
@@ -767,7 +767,7 @@ function createKey() {
             NextPage();
         })
 
-        let xkey_boss = db.get('key_boss');
+        let xkey_boss = await db.get('key_boss');
         // 如果指令有问题，则不注册
         if (!xkey_boss || xkey_boss.indexOf('+') < 0) {
             return
@@ -781,7 +781,7 @@ function createKey() {
             BossKey(2);
         })
 
-        let xkey_auto = db.get('key_auto');
+        let xkey_auto = await db.get('key_auto');
         // 如果指令有问题，则不注册
         if (!xkey_auto || xkey_auto.indexOf('+') < 0) {
             return
@@ -819,7 +819,7 @@ function createKey() {
     })
 }
 
-function createTray() {
+async function createTray() {
     const menubarLogo = process.platform === 'darwin' ? `${__static}/mac.png` : `${__static}/win.png`
 
     var menuList = [];
@@ -861,7 +861,7 @@ function createTray() {
         }, {
             label: '任务栏模式',
             type: 'radio',
-            checked: db.get('curr_model') === '1',
+            checked: (await db.get('curr_model')) === '1',
             click() {
                 db.set("curr_model", "1")
 
@@ -878,7 +878,7 @@ function createTray() {
         }, {
             label: '桌面模式',
             type: 'radio',
-            checked: db.get('curr_model') === '2',
+            checked: (await db.get('curr_model')) === '2',
             click() {
                 db.set("curr_model", "2")
 
@@ -904,7 +904,7 @@ function createTray() {
         }, {
             label: 'TouchBar模式',
             type: 'radio',
-            checked: db.get('curr_model') === '3',
+            checked: (await db.get('curr_model')) === '3',
             click() {
                 db.set("curr_model", "3")
 
@@ -935,7 +935,7 @@ function createTray() {
     }, {
         label: '小说摸鱼',
         type: 'radio',
-        checked: db.get('display_model') === '1',
+        checked: (await db.get('display_model')) === '1',
         click() {
             clearInterval(autoStockTime);
             db.set("display_model", "1");
@@ -944,10 +944,10 @@ function createTray() {
     }, {
         label: '股票摸鱼',
         type: 'radio',
-        checked: db.get('display_model') === '2',
-        click() {
+        checked: (await db.get('display_model')) === '2',
+        click: async () => {
             db.set("display_model", "2");
-            let display_shares_list = db.get('display_shares_list');
+            let display_shares_list = await db.get('display_shares_list');
 
             stock.getData(display_shares_list, function(text) {
                 updateText(text);
@@ -1006,26 +1006,26 @@ function createTray() {
     }, {
         label: '自动翻页',
         type: 'checkbox',
-        accelerator: db.get('key_auto'),
-        checked: db.get('auto_page') === '1',
+        accelerator: await db.get('key_auto'),
+        checked: (await db.get('auto_page')) === '1',
         click() {
             AutoPage();
         }
     }, {
         label: '上一页',
-        accelerator: db.get('key_previous'),
+        accelerator: await db.get('key_previous'),
         click() {
             PreviousPage();
         }
     }, {
         label: '下一页',
-        accelerator: db.get('key_next'),
+        accelerator: await db.get('key_next'),
         click() {
             NextPage();
         }
     }, {
         label: '老板键',
-        accelerator: db.get('key_boss'),
+        accelerator: await db.get('key_boss'),
         click() {
             BossKey(2);
         }
@@ -1082,24 +1082,24 @@ function createSetting() {
     }
 }
 
-ipcMain.on('bg_text_color', function() {
+ipcMain.on('bg_text_color', async function() {
     console.log('主进程收到bg_text_color事件');
     
     // 读取最新的颜色配置
     const colorConfig = {
-        bg_color: db.get("bg_color"),
-        txt_color: db.get("txt_color"),
-        font_size: db.get("font_size")
+        bg_color: await db.get("bg_color"),
+        txt_color: await db.get("txt_color"),
+        font_size: await db.get("font_size")
     };
     
     console.log('读取到的最新颜色配置:', colorConfig);
     
     tray.destroy();
-    createKey();
-    createTray();
+    await createKey();
+    await createTray();
 
     // 重新启动或停止股票监控
-    if (db.get("limit_up_alert_enabled")) {
+    if (await db.get("limit_up_alert_enabled")) {
         stockMonitor.startMonitoring();
     } else {
         stockMonitor.stopMonitoring();
