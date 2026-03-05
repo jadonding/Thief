@@ -15,8 +15,8 @@ export default {
     /**
      * 开始监控涨停股票
      */
-    startMonitoring() {
-        if (!db.get("limit_up_alert_enabled")) {
+    async startMonitoring() {
+        if (!(await db.get("limit_up_alert_enabled"))) {
             console.log("涨停告警未启用");
             return;
         }
@@ -54,7 +54,7 @@ export default {
     /**
      * 重新启动监控（强制刷新配置）
      */
-    restartMonitoring() {
+    async restartMonitoring() {
         console.log("重新启动股票监控...");
         
         // 强制重新加载配置文件
@@ -73,8 +73,8 @@ export default {
         this.stopMonitoring();
         
         // 延迟100ms后重新启动
-        setTimeout(() => {
-            if (db.get("limit_up_alert_enabled")) {
+        setTimeout(async () => {
+            if (await db.get("limit_up_alert_enabled")) {
                 this.startMonitoring();
             }
         }, 100);
@@ -86,7 +86,7 @@ export default {
     async checkStocks() {
         try {
             // 每次都重新从数据库获取最新的股票代码列表
-            const stockCodes = db.get("display_shares_list") || [];
+            const stockCodes = await db.get("display_shares_list") || [];
             if (stockCodes.length === 0) {
                 return;
             }
@@ -94,7 +94,11 @@ export default {
             console.log('检查股票：', stockCodes.map(s => s.code).join(','));
 
             stockUtils.getData(stockCodes, (result) => {
-                this.parseAndAnalyzeStockData(result, stockCodes);
+                try {
+                    this.parseAndAnalyzeStockData(result, stockCodes);
+                } catch (err) {
+                    console.error("解析股票数据回调异常:", err);
+                }
             });
         } catch (error) {
             console.error("检查股票数据时出错:", error);
@@ -107,6 +111,15 @@ export default {
      * @param {Array} stockCodes 股票代码列表
      */
     parseAndAnalyzeStockData(stockDataText, stockCodes) {
+        if (typeof stockDataText !== 'string') {
+            console.error("股票数据格式异常，期望字符串，实际类型:", typeof stockDataText);
+            return;
+        }
+
+        if (!stockDataText.trim()) {
+            return;
+        }
+
         const lines = stockDataText.split('\n').filter(line => line.trim());
         
         lines.forEach((line, index) => {
@@ -328,10 +341,10 @@ export default {
     /**
      * 打印当前配置的股票代码（用于调试）
      */
-    logCurrentStocks() {
+    async logCurrentStocks() {
         try {
             console.log('-------- 配置文件中的股票代码 --------');
-            const stockCodes = db.get("display_shares_list") || [];
+            const stockCodes = await db.get("display_shares_list") || [];
             console.log('股票数量:', stockCodes.length);
             if (stockCodes.length > 0) {
                 stockCodes.forEach((stock, index) => {
@@ -347,7 +360,7 @@ export default {
                 const fs = require('fs-extra');
                 const path = require('path');
                 const electron = require('electron');
-                const app = electron.app || electron.remote.app;
+                const app = electron.app;
                 const userData = app.getPath('userData');
                 const configPath = path.join(userData, '/thief_data.json');
                 
@@ -367,7 +380,7 @@ export default {
                         
                         // 强制重新加载数据库
                         db.reloadConfig();
-                        const reloadedStocks = db.get("display_shares_list") || [];
+                        const reloadedStocks = await db.get("display_shares_list") || [];
                         console.log('重新加载后的股票代码:', JSON.stringify(reloadedStocks));
                     } else {
                         console.log('✓ 数据库和文件中的股票代码一致');

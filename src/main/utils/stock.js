@@ -1,5 +1,4 @@
 'use strict';
-var rp = require('request-promise');
 const request = require('superagent')
 require('superagent-charset')(request)
 // const url = 'http://hq.sinajs.cn/list=';
@@ -18,10 +17,10 @@ const stockUtils = {
     isStockCacheInitialized: false, // 添加标志位
 
     // 从本地存储加载股票缓存
-    loadStockCacheFromStorage() {
+    async loadStockCacheFromStorage() {
         try {
             const db = require('./db').default;
-            const storedCache = db.get('stock_code_mapping');
+            const storedCache = await db.get('stock_code_mapping');
             if (storedCache && Object.keys(storedCache).length > 0) {
                 this.stockCache = storedCache;
                 this.isStockCacheInitialized = true;
@@ -51,7 +50,7 @@ const stockUtils = {
     async initializeStockCache() {
         if (!this.isStockCacheInitialized) {
             // 首先尝试从本地加载
-            if (!this.loadStockCacheFromStorage()) {
+            if (!await this.loadStockCacheFromStorage()) {
                 // 如果本地没有数据，则从API获取
                 console.log('本地无股票数据缓存，从API获取...');
                 await this.fetchAllStockCodesFromEastMoney();
@@ -328,9 +327,9 @@ const stockUtils = {
     },
 
     // 获取股票缓存统计信息
-    getStockCacheInfo() {
+    async getStockCacheInfo() {
         const db = require('./db').default;
-        const updateTime = db.get('stock_cache_update_time');
+        const updateTime = await db.get('stock_cache_update_time');
         return {
             count: Object.keys(this.stockCache).length,
             updateTime: updateTime || '未知',
@@ -529,7 +528,8 @@ const stockUtils = {
                 }
                 func(textAll)
             }).catch((err) => {
-            func(err);
+            console.error('请求股票行情失败:', err && err.message ? err.message : err);
+            func('');
         })
         // request
         //     .get(url)

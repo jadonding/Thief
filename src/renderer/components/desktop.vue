@@ -21,8 +21,8 @@
 
 <script>
 import db from "../../main/utils/db";
-import { ipcRenderer, remote } from "electron";
-import { on } from "cluster";
+import { ipcRenderer } from "electron";
+import remote from "@electron/remote";
 
 export default {
   name: "desktop",
@@ -95,9 +95,22 @@ export default {
       }
     });
 
-    ipcRenderer.on("text", function(event, message) {
-      const raw = remote.getGlobal("text").text;
-      // convert newlines to HTML line breaks
+    ipcRenderer.on("text", function(event, payload) {
+      let message = "ping";
+      let raw = "";
+
+      if (payload && typeof payload === "object") {
+        message = payload.message || "ping";
+        raw = payload.text || "";
+      } else {
+        message = payload;
+        try {
+          raw = remote.getGlobal("text").text || "";
+        } catch (_) {
+          raw = "";
+        }
+      }
+
       const htmlText = String(raw).replace(/(?:\r\n|\r|\n)/g, '<br/>');
       if (message === "boss") {
         that.is_boss = true;
