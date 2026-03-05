@@ -1,5 +1,4 @@
 'use strict';
-var rp = require('request-promise');
 const request = require('superagent')
 require('superagent-charset')(request)
 // const url = 'http://hq.sinajs.cn/list=';
@@ -529,7 +528,8 @@ const stockUtils = {
                 }
                 func(textAll)
             }).catch((err) => {
-            func(err);
+            console.error('请求股票行情失败:', err && err.message ? err.message : err);
+            func('');
         })
         // request
         //     .get(url)

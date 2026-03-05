@@ -1,13 +1,17 @@
 import { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, shell, dialog, nativeImage, TouchBar } from 'electron'
+import path from 'path'
+import fs from 'fs'
 import db from './utils/db'
 import book from './utils/book'
 import osUtil from './utils/osUtil'
 import stock from './utils/stock'
 import ad from './utils/ad'
 import stockMonitor from './utils/stockMonitor'
-import request from 'request'
+import axios from 'axios'
+const remoteMain = require('@electron/remote/main')
 
 const { TouchBarButton, TouchBarSpacer } = TouchBar
+const APP_USER_MODEL_ID = 'c.team.thief'
 
 let touchBarText = null;
 
@@ -85,6 +89,7 @@ let desktopBarWindow;
 let webWindow;
 let videoWindow;
 let pdfWindow;
+const isDev = process.env.NODE_ENV === 'development'
 
 const isMac = 'darwin' === process.platform;
 
@@ -112,7 +117,122 @@ const pdfURL = process.env.NODE_ENV === 'development' ?
     `http://localhost:9080/#/pdf` :
     `file://${__dirname}/index.html#pdf`
 
+function resolveStaticAsset(fileName) {
+    const candidates = [
+        typeof __static !== 'undefined' ? path.join(__static, fileName) : null,
+        path.join(__dirname, 'static', fileName),
+        path.join(process.cwd(), 'static', fileName),
+        path.join(process.resourcesPath || '', 'app', 'dist', 'electron', 'static', fileName),
+        path.join(process.resourcesPath || '', 'app.asar', 'dist', 'electron', 'static', fileName),
+        path.join(process.resourcesPath || '', 'static', fileName)
+    ].filter(Boolean)
+
+    for (const filePath of candidates) {
+        try {
+            if (fs.existsSync(filePath)) {
+                return filePath
+            }
+        } catch (_) {}
+    }
+    return null
+}
+
+function loadAppIconImage() {
+    const iconPath = resolveStaticAsset('icon.png')
+    if (iconPath) {
+        const image = nativeImage.createFromPath(iconPath)
+        if (!image.isEmpty()) {
+            return image
+        }
+    }
+    return nativeImage.createEmpty()
+}
+
+function loadTrayImage() {
+    const trayPath = resolveStaticAsset(process.platform === 'darwin' ? 'mac.png' : 'win.png') || resolveStaticAsset('icon.png')
+    if (trayPath) {
+        const image = nativeImage.createFromPath(trayPath)
+        if (!image.isEmpty()) {
+            return image
+        }
+    }
+    return loadAppIconImage()
+}
+
+function withWindowIcon(options) {
+    const icon = loadAppIconImage()
+    if (!icon.isEmpty()) {
+        return Object.assign({}, options, { icon })
+    }
+    return options
+}
+
+function setTrayTitleSafe(title = '') {
+    if (!tray) {
+        return
+    }
+    try {
+        tray.setTitle(title)
+    } catch (_) {}
+}
+
+function normalizeAccelerator(value) {
+    if (typeof value !== 'string') {
+        return undefined
+    }
+    const x = value.trim()
+    return x.includes('+') ? x : undefined
+}
+
+function attachWindowDebug(windowName, win) {
+    if (process.env.NODE_ENV !== 'development' || !win || !win.webContents) {
+        return
+    }
+
+    win.webContents.on('did-fail-load', (_, errorCode, errorDescription, validatedURL) => {
+        console.error(`[${windowName}] did-fail-load`, { errorCode, errorDescription, validatedURL })
+    })
+
+    win.webContents.on('render-process-gone', (_, details) => {
+        console.error(`[${windowName}] render-process-gone`, details)
+    })
+
+    win.webContents.on('console-message', (_, level, message, line, sourceId) => {
+        console.log(`[${windowName}] console-message`, { level, message, line, sourceId })
+    })
+}
+
+function lockWebContentsZoom(webContents, windowName) {
+    if (!webContents) {
+        return
+    }
+
+    try {
+        if (typeof webContents.setZoomFactor === 'function') {
+            webContents.setZoomFactor(1)
+        }
+        if (typeof webContents.setVisualZoomLevelLimits === 'function') {
+            webContents.setVisualZoomLevelLimits(1, 1)
+        }
+        if (typeof webContents.setLayoutZoomLevelLimits === 'function') {
+            webContents.setLayoutZoomLevelLimits(0, 0)
+        } else if (isDev) {
+            console.log(`[${windowName}] setLayoutZoomLevelLimits is unavailable on this Electron version`)
+        }
+    } catch (error) {
+        console.error(`[${windowName}] lock zoom failed`, error)
+    }
+}
+
 async function init() {
+    remoteMain.initialize()
+    if (process.platform === 'win32') {
+        app.setAppUserModelId(APP_USER_MODEL_ID)
+    }
+    app.on('browser-window-created', (_, window) => {
+        remoteMain.enable(window.webContents)
+    })
+
     Menu.setApplicationMenu(null);
 
     // 初始化临时配置
@@ -167,7 +287,7 @@ function createVideo() {
         frame = false;
     }
 
-    videoWindow = new BrowserWindow({
+    videoWindow = new BrowserWindow(withWindowIcon({
         useContentSize: true,
         width: 478,
         height: 28,
@@ -177,15 +297,15 @@ function createVideo() {
         resizable: true,
         frame: frame,
         webPreferences: {
-            nodeIntegration: true
+            nodeIntegration: true,
+            contextIsolation: false
         },
-    })
+    }))
 
     let webContents = videoWindow.webContents;
+    attachWindowDebug('videoWindow', videoWindow)
     webContents.on('did-finish-load', () => {
-        webContents.setZoomFactor(1);
-        webContents.setVisualZoomLevelLimits(1, 1);
-        webContents.setLayoutZoomLevelLimits(0, 0);
+        lockWebContentsZoom(webContents, 'videoWindow')
     })
 
     videoWindow.loadURL(videoURL)
@@ -193,7 +313,7 @@ function createVideo() {
     videoWindow.setOpacity(1.0)
 
     videoWindow.setAlwaysOnTop(true);
-    videoWindow.setSkipTaskbar(true);
+    videoWindow.setSkipTaskbar(!isDev);
 
     videoWindow.on('closed', () => {
         videoWindow = null
@@ -210,7 +330,7 @@ function createPdf() {
         frame = false;
     }
 
-    pdfWindow = new BrowserWindow({
+    pdfWindow = new BrowserWindow(withWindowIcon({
         useContentSize: true,
         width: 478,
         height: 28,
@@ -220,15 +340,15 @@ function createPdf() {
         resizable: true,
         frame: frame,
         webPreferences: {
-            nodeIntegration: true
+            nodeIntegration: true,
+            contextIsolation: false
         },
-    })
+    }))
 
     let webContents = pdfWindow.webContents;
+    attachWindowDebug('pdfWindow', pdfWindow)
     webContents.on('did-finish-load', () => {
-        webContents.setZoomFactor(1);
-        webContents.setVisualZoomLevelLimits(1, 1);
-        webContents.setLayoutZoomLevelLimits(0, 0);
+        lockWebContentsZoom(webContents, 'pdfWindow')
     })
 
     pdfWindow.loadURL(pdfURL)
@@ -236,7 +356,7 @@ function createPdf() {
     pdfWindow.setOpacity(1.0)
 
     pdfWindow.setAlwaysOnTop(true);
-    pdfWindow.setSkipTaskbar(true);
+    pdfWindow.setSkipTaskbar(!isDev);
 
     pdfWindow.on('closed', () => {
         pdfWindow = null
@@ -253,7 +373,7 @@ function createWeb() {
         frame = false;
     }
 
-    webWindow = new BrowserWindow({
+    webWindow = new BrowserWindow(withWindowIcon({
         useContentSize: true,
         width: 478,
         height: 28,
@@ -264,15 +384,15 @@ function createWeb() {
         frame: frame,
         webPreferences: {
             nodeIntegration: true,
+            contextIsolation: false,
             webviewTag: true
         },
-    })
+    }))
 
     let webContents = webWindow.webContents;
+    attachWindowDebug('webWindow', webWindow)
     webContents.on('did-finish-load', () => {
-        webContents.setZoomFactor(1);
-        webContents.setVisualZoomLevelLimits(1, 1);
-        webContents.setLayoutZoomLevelLimits(0, 0);
+        lockWebContentsZoom(webContents, 'webWindow')
     })
 
     webWindow.loadURL(webURL)
@@ -280,7 +400,7 @@ function createWeb() {
     webWindow.setOpacity(1.0)
 
     webWindow.setAlwaysOnTop(true);
-    webWindow.setSkipTaskbar(true);
+    webWindow.setSkipTaskbar(!isDev);
 
     webWindow.on('closed', () => {
         webWindow = null
@@ -292,7 +412,7 @@ function createSoSetting() {
      * Initial window options
      */
 
-    soWindow = new BrowserWindow({
+    soWindow = new BrowserWindow(withWindowIcon({
         title: '搜 索',
         useContentSize: true,
         width: 334,
@@ -302,14 +422,14 @@ function createSoSetting() {
         minimizable: false,
         webPreferences: {
             nodeIntegration: true,
+            contextIsolation: false,
         },
-    })
+    }))
 
     let webContents = soWindow.webContents;
+    attachWindowDebug('soWindow', soWindow)
     webContents.on('did-finish-load', () => {
-        webContents.setZoomFactor(1);
-        webContents.setVisualZoomLevelLimits(1, 1);
-        webContents.setLayoutZoomLevelLimits(0, 0);
+        lockWebContentsZoom(webContents, 'soWindow')
     })
 
     soWindow.loadURL(soURL)
@@ -324,7 +444,7 @@ function createWindownSetting() {
     /**
      * Initial window options
      */
-    settingWindow = new BrowserWindow({
+    settingWindow = new BrowserWindow(withWindowIcon({
         title: '设 置',
         useContentSize: true,
         width: 780,
@@ -334,14 +454,14 @@ function createWindownSetting() {
         minimizable: false,
         webPreferences: {
             nodeIntegration: true,
+            contextIsolation: false,
         },
-    })
+    }))
 
     let webContents = settingWindow.webContents;
+    attachWindowDebug('settingWindow', settingWindow)
     webContents.on('did-finish-load', () => {
-        webContents.setZoomFactor(1);
-        webContents.setVisualZoomLevelLimits(1, 1);
-        webContents.setLayoutZoomLevelLimits(0, 0);
+        lockWebContentsZoom(webContents, 'settingWindow')
     })
 
     settingWindow.loadURL(settingURL)
@@ -377,7 +497,7 @@ async function createWindownDesktop() {
         y = parseInt(arr_wz[0]);
     }
 
-    desktopWindow = new BrowserWindow({
+    desktopWindow = new BrowserWindow(withWindowIcon({
         useContentSize: true,
         width: width,
         height: height,
@@ -389,14 +509,14 @@ async function createWindownDesktop() {
         x: y,
         webPreferences: {
             nodeIntegration: true,
+            contextIsolation: false,
         },
-    })
+    }))
 
     let webContents = desktopWindow.webContents;
+    attachWindowDebug('desktopWindow', desktopWindow)
     webContents.on('did-finish-load', () => {
-        webContents.setZoomFactor(1);
-        webContents.setVisualZoomLevelLimits(1, 1);
-        webContents.setLayoutZoomLevelLimits(0, 0);
+        lockWebContentsZoom(webContents, 'desktopWindow')
     })
 
     desktopWindow.loadURL(desktopURL)
@@ -426,7 +546,7 @@ function createWindownBarDesktop() {
     /**
      * Initial window options
      */
-    desktopBarWindow = new BrowserWindow({
+    desktopBarWindow = new BrowserWindow(withWindowIcon({
         useContentSize: true,
         width: 88,
         height: 23,
@@ -435,19 +555,19 @@ function createWindownBarDesktop() {
         transparent: true,
         webPreferences: {
             nodeIntegration: true,
+            contextIsolation: false,
         },
         // maximizable: false
         // y: 600,
         // x: 300
-    })
+    }))
 
     desktopBarWindow.setTouchBar(createTouchBarText())
 
     let webContents = desktopBarWindow.webContents;
+    attachWindowDebug('desktopBarWindow', desktopBarWindow)
     webContents.on('did-finish-load', () => {
-        webContents.setZoomFactor(1);
-        webContents.setVisualZoomLevelLimits(1, 1);
-        webContents.setLayoutZoomLevelLimits(0, 0);
+        lockWebContentsZoom(webContents, 'desktopBarWindow')
     })
 
     desktopBarWindow.loadURL(desktopURL)
@@ -468,6 +588,13 @@ function setText(text) {
     }
 }
 
+function sendDesktopText(message = 'ping') {
+    if (desktopWindow != null && desktopWindow.webContents) {
+        const text = global.text && typeof global.text.text !== 'undefined' ? global.text.text : ''
+        desktopWindow.webContents.send('text', { message, text })
+    }
+}
+
 async function MouseModel(e) {
     if (desktopWindow != null) {
         if (e.checked == true) {
@@ -481,7 +608,7 @@ async function MouseModel(e) {
         setTimeout(async () => {
             let text = await db.get('moyu_text');
             setText(text);
-            desktopWindow.webContents.send('text', 'boss');
+            sendDesktopText('boss');
         }, 2000);
     }
 }
@@ -524,15 +651,15 @@ async function AutoStock() {
 async function updateText(text) {
     let curr_model = await db.get('curr_model');
     if (curr_model === '1') {
-        tray.setTitle(text);
+        setTrayTitleSafe(text);
     } else if (curr_model === '2') {
-        tray.setTitle("");
+        setTrayTitleSafe("");
         setText(text);
         if (desktopWindow != null) {
-            desktopWindow.webContents.send('text', 'ping');
+            sendDesktopText('ping');
         }
     } else if (curr_model === '3') {
-        tray.setTitle("");
+        setTrayTitleSafe("");
 
         if (desktopBarWindow != null) {
             setText(osUtil.getCpu());
@@ -580,9 +707,9 @@ async function BossKey(type) {
         if (is_ad === "") {
             ad.getAd(function(x) {
                 if (x === "err") {
-                    tray.setTitle(text);
+                    setTrayTitleSafe(text);
                 } else {
-                    tray.setTitle(x);
+                    setTrayTitleSafe(x);
                     var timex = new Date().getTime()
                     db.set("is_ad", timex);
                 }
@@ -592,27 +719,30 @@ async function BossKey(type) {
             if (timex - is_ad >= 28800000) {
                 ad.getAd(function(x) {
                     if (x === "err") {
-                        tray.setTitle(text);
+                        setTrayTitleSafe(text);
                     } else {
-                        tray.setTitle(x);
+                        setTrayTitleSafe(x);
                         var timex = new Date().getTime()
                         db.set("is_ad", timex);
                     }
                 })
             } else {
-                tray.setTitle(text);
+                setTrayTitleSafe(text);
             }
         }
 
     } else if (curr_model === '2') {
-        tray.setTitle("");
+        setTrayTitleSafe("");
+        setText(text);
 
         if (is_ad === "") {
             ad.getAd(function(x) {
                 if (x === "err") {
                     setText(text);
+                    sendDesktopText(type === 1 ? 'boss' : 'ping');
                 } else {
                     setText(x);
+                    sendDesktopText(type === 1 ? 'boss' : 'ping');
                     var timex = new Date().getTime()
                     db.set("is_ad", timex);
                 }
@@ -623,20 +753,23 @@ async function BossKey(type) {
                 ad.getAd(function(x) {
                     if (x === "err") {
                         setText(text);
+                        sendDesktopText(type === 1 ? 'boss' : 'ping');
                     } else {
                         setText(x);
+                        sendDesktopText(type === 1 ? 'boss' : 'ping');
                         var timex = new Date().getTime()
                         db.set("is_ad", timex);
                     }
                 })
             } else {
                 setText(text);
+                sendDesktopText(type === 1 ? 'boss' : 'ping');
             }
         }
 
         if (desktopWindow != null) {
             if (type === 1) {
-                desktopWindow.webContents.send('text', 'boss');
+                sendDesktopText('boss');
             } else if (type === 2) {
                 {
                     if (desktopWindow.isVisible()) {
@@ -648,7 +781,7 @@ async function BossKey(type) {
             }
         }
     } else if (curr_model === '3') {
-        tray.setTitle("");
+        setTrayTitleSafe("");
 
         if (desktopBarWindow != null) {
             setText(osUtil.getCpu());
@@ -691,12 +824,12 @@ async function BossKey(type) {
 
 
 function checkUpdate() {
-    request({
-        url: "https://gitee.com/lauix/public_version/raw/master/version.txt",
-        method: "GET"
-    }, function(err, res, body) {
-        const logo = `${__static}/icon.png`;
-        const image = nativeImage.createFromPath(logo)
+    axios.get("https://gitee.com/lauix/public_version/raw/master/version.txt", {
+        timeout: 10000,
+        responseType: 'text'
+    }).then(function(response) {
+        const body = typeof response.data === 'string' ? response.data : String(response.data)
+        const image = loadAppIconImage()
 
         var newVersion = parseFloat(body);
 
@@ -724,6 +857,8 @@ function checkUpdate() {
             }
             dialog.showMessageBox(options)
         }
+    }).catch(function() {
+        // ignore update check errors
     })
 }
 
@@ -795,8 +930,8 @@ async function createKey() {
             AutoPage();
         })
     } catch (error) {
-        const logo = `${__static}/icon.png`;
-        const image = nativeImage.createFromPath(logo)
+        console.error('Global shortcut registration failed:', error);
+        const image = loadAppIconImage()
 
         const options = {
             type: 'info',
@@ -811,7 +946,8 @@ async function createKey() {
             }
         })
 
-        Exit();
+        // Keep app running even if shortcuts fail to register.
+        // User can still use tray menu to open settings and fix invalid shortcuts.
     }
 
     globalShortcut.register('CommandOrControl+Alt+X', function() {
@@ -820,14 +956,18 @@ async function createKey() {
 }
 
 async function createTray() {
-    const menubarLogo = process.platform === 'darwin' ? `${__static}/mac.png` : `${__static}/win.png`
+    if (tray) {
+        try {
+            tray.destroy()
+        } catch (_) {}
+        tray = null
+    }
 
     var menuList = [];
     menuList.push({
         label: '关于',
         click() {
-            const logo = `${__static}/icon.png`;
-            const image = nativeImage.createFromPath(logo)
+            const image = loadAppIconImage()
 
             const options = {
                 type: 'info',
@@ -1006,26 +1146,26 @@ async function createTray() {
     }, {
         label: '自动翻页',
         type: 'checkbox',
-        accelerator: await db.get('key_auto'),
+        accelerator: normalizeAccelerator(await db.get('key_auto')),
         checked: (await db.get('auto_page')) === '1',
         click() {
             AutoPage();
         }
     }, {
         label: '上一页',
-        accelerator: await db.get('key_previous'),
+        accelerator: normalizeAccelerator(await db.get('key_previous')),
         click() {
             PreviousPage();
         }
     }, {
         label: '下一页',
-        accelerator: await db.get('key_next'),
+        accelerator: normalizeAccelerator(await db.get('key_next')),
         click() {
             NextPage();
         }
     }, {
         label: '老板键',
-        accelerator: await db.get('key_boss'),
+        accelerator: normalizeAccelerator(await db.get('key_boss')),
         click() {
             BossKey(2);
         }
@@ -1067,10 +1207,23 @@ async function createTray() {
         }
     });
 
-
-    // tray = new Tray(nativeImage.createEmpty())
-    tray = new Tray(menubarLogo)
-    tray.setContextMenu(Menu.buildFromTemplate(menuList))
+    try {
+        tray = new Tray(loadTrayImage())
+    } catch (error) {
+        console.error('Failed to create tray with preferred icon:', error)
+        try {
+            tray = new Tray(loadAppIconImage())
+        } catch (fallbackError) {
+            console.error('Failed to create tray with fallback icon:', fallbackError)
+            return
+        }
+    }
+    tray.setToolTip('Thief')
+    try {
+        tray.setContextMenu(Menu.buildFromTemplate(menuList))
+    } catch (error) {
+        console.error('Failed to build tray menu template:', error)
+    }
     BossKey();
 }
 
@@ -1094,7 +1247,12 @@ ipcMain.on('bg_text_color', async function() {
     
     console.log('读取到的最新颜色配置:', colorConfig);
     
-    tray.destroy();
+    if (tray) {
+        try {
+            tray.destroy()
+        } catch (_) {}
+        tray = null
+    }
     await createKey();
     await createTray();
 

@@ -300,11 +300,37 @@ export default {
     };
   },
   created() {
-    this.onLoad();
-    this.onKey();
-    this.loadStockCacheInfo();
+    try {
+      this.onLoad();
+    } catch (error) {
+      console.error("setting onLoad failed:", error);
+    }
+    try {
+      this.onKey();
+    } catch (error) {
+      console.error("setting onKey failed:", error);
+    }
+    try {
+      this.loadStockCacheInfo();
+    } catch (error) {
+      console.error("setting loadStockCacheInfo failed:", error);
+    }
   },
   methods: {
+    parseHotkey(value) {
+      const key = typeof value === "string" ? value : "";
+      const arr = key.split("+");
+      if (arr.length >= 2) {
+        return {
+          mod: arr.slice(0, arr.length - 1).join("+"),
+          code: arr[arr.length - 1]
+        };
+      }
+      return {
+        mod: "Alt",
+        code: ""
+      };
+    },
     updateStockCodeFromInput(index) {
       const inputValue = this.stockDisplay[index] ? this.stockDisplay[index].trim() : "";
 
@@ -488,45 +514,21 @@ export default {
       this.form.font_size = db.get("font_size");
       this.form.second = db.get("second");
 
-      var key_previous = db.get("key_previous");
-      var arr = key_previous.split("+");
-      if (arr.length === 2) {
-        this.keyPrevious = arr[0];
-        this.keyPreviousX = arr[1];
-      } else if (arr.length === 3) {
-        this.keyPrevious = arr[0] + "+" + arr[1];
-        this.keyPreviousX = arr[2];
-      }
+      const previousHotkey = this.parseHotkey(db.get("key_previous"));
+      this.keyPrevious = previousHotkey.mod;
+      this.keyPreviousX = previousHotkey.code;
 
-      var key_next = db.get("key_next");
-      var arr = key_next.split("+");
-      if (arr.length === 2) {
-        this.keyNext = arr[0];
-        this.keyNextX = arr[1];
-      } else if (arr.length === 3) {
-        this.keyNext = arr[0] + "+" + arr[1];
-        this.keyNextX = arr[2];
-      }
+      const nextHotkey = this.parseHotkey(db.get("key_next"));
+      this.keyNext = nextHotkey.mod;
+      this.keyNextX = nextHotkey.code;
 
-      var key_boss = db.get("key_boss");
-      var arr = key_boss.split("+");
-      if (arr.length === 2) {
-        this.keyBoss = arr[0];
-        this.keyBossX = arr[1];
-      } else if (arr.length === 3) {
-        this.keyBoss = arr[0] + "+" + arr[1];
-        this.keyBossX = arr[2];
-      }
+      const bossHotkey = this.parseHotkey(db.get("key_boss"));
+      this.keyBoss = bossHotkey.mod;
+      this.keyBossX = bossHotkey.code;
 
-      var key_auto = db.get("key_auto");
-      var arr = key_auto.split("+");
-      if (arr.length === 2) {
-        this.keyAuto = arr[0];
-        this.keyAutoX = arr[1];
-      } else if (arr.length === 3) {
-        this.keyAuto = arr[0] + "+" + arr[1];
-        this.keyAutoX = arr[2];
-      }
+      const autoHotkey = this.parseHotkey(db.get("key_auto"));
+      this.keyAuto = autoHotkey.mod;
+      this.keyAutoX = autoHotkey.code;
 
       this.lmchecked = db.get("errCodeChecked");
 
@@ -713,7 +715,7 @@ export default {
 
     // 导出配置
     exportConfig() {
-      const { remote } = require('electron');
+      const remote = require('@electron/remote');
       const { dialog } = remote;
       
       dialog.showSaveDialog({
@@ -743,7 +745,7 @@ export default {
     
     // 导入配置
     importConfig() {
-      const { remote } = require('electron');
+      const remote = require('@electron/remote');
       const { dialog } = remote;
       
       dialog.showOpenDialog({
@@ -788,8 +790,8 @@ export default {
       try {
         const fs = require('fs-extra');
         const path = require('path');
-        const electron = require('electron');
-        const app = electron.remote.app;
+        const remote = require('@electron/remote');
+        const app = remote.app;
         const userData = app.getPath('userData');
         const configPath = path.join(userData, '/thief_data.json');
         

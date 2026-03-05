@@ -94,7 +94,11 @@ export default {
             console.log('检查股票：', stockCodes.map(s => s.code).join(','));
 
             stockUtils.getData(stockCodes, (result) => {
-                this.parseAndAnalyzeStockData(result, stockCodes);
+                try {
+                    this.parseAndAnalyzeStockData(result, stockCodes);
+                } catch (err) {
+                    console.error("解析股票数据回调异常:", err);
+                }
             });
         } catch (error) {
             console.error("检查股票数据时出错:", error);
@@ -107,6 +111,15 @@ export default {
      * @param {Array} stockCodes 股票代码列表
      */
     parseAndAnalyzeStockData(stockDataText, stockCodes) {
+        if (typeof stockDataText !== 'string') {
+            console.error("股票数据格式异常，期望字符串，实际类型:", typeof stockDataText);
+            return;
+        }
+
+        if (!stockDataText.trim()) {
+            return;
+        }
+
         const lines = stockDataText.split('\n').filter(line => line.trim());
         
         lines.forEach((line, index) => {
@@ -347,7 +360,7 @@ export default {
                 const fs = require('fs-extra');
                 const path = require('path');
                 const electron = require('electron');
-                const app = electron.app || electron.remote.app;
+                const app = electron.app;
                 const userData = app.getPath('userData');
                 const configPath = path.join(userData, '/thief_data.json');
                 
