@@ -11,3 +11,6 @@ thumbs.db
 *.DS_Store
 yarn.lock
 yarn-error.log
+/build/
+/.idea
+/package-lock.json
