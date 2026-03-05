@@ -184,7 +184,11 @@ function setTrayTitleSafe(title = '') {
         return
     }
     try {
-        tray.setTitle(title)
+        const singleLineTitle = String(title)
+            .replace(/\r?\n|\r/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+        tray.setTitle(singleLineTitle)
     } catch (_) {}
 }
 
@@ -1456,9 +1460,9 @@ ipcMain.on('refresh_stock_data', async (event) => {
 });
 
 // 获取股票缓存信息
-ipcMain.on('get_stock_cache_info', (event) => {
+ipcMain.on('get_stock_cache_info', async (event) => {
     try {
-        const info = stock.getStockCacheInfo();
+        const info = await stock.getStockCacheInfo();
         event.sender.send('get_stock_cache_info_result', {
             success: true,
             data: info
