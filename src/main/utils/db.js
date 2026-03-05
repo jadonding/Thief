@@ -1,6 +1,5 @@
 'use strict';
-import low from 'lowdb'
-import FileSync from 'lowdb/adapters/FileSync'
+import { Low, JSONFile } from 'lowdb'
 import path from 'path'
 import fs from 'fs-extra'
 import LodashId from 'lodash-id'
@@ -18,7 +17,7 @@ export default {
             STORE_PATH: ""
         };
     },
-    init() {
+    async init() {
         if (this.initialized) {
             return true;
         }
@@ -42,8 +41,19 @@ export default {
                 return false;
             }
 
-            this.file_json = new FileSync(this.filePath);
-            this.db_util = low(this.file_json);
+            // 使用新的 lowdb API
+            const adapter = new JSONFile(this.filePath);
+            this.db_util = new Low(adapter);
+            
+            // 读取数据
+            await this.db_util.read();
+            
+            // 初始化默认数据
+            if (!this.db_util.data) {
+                this.db_util.data = {};
+            }
+            
+            // 添加 LodashId mixin
             this.db_util._.mixin(LodashId);
             
             // 初始化配置默认值
@@ -153,126 +163,13 @@ export default {
         
         // 设置默认值
         Object.entries(this.defaultConfig).forEach(([key, value]) => {
-            if (!this.db_util.has(key).value()) {
-                this.db_util.set(key, value).write()
+            if (this.db_util.data[key] === undefined) {
+                this.db_util.data[key] = value;
             }
         });
 
-        if (!this.db_util.has('current_page').value()) {
-            this.db_util.set('current_page', 1).write()
-        }
-
-        if (!this.db_util.has('page_size').value()) {
-            this.db_util.set('page_size', 20).write()
-        }
-
-        if (!this.db_util.has('is_english').value()) {
-            this.db_util.set('is_english', false).write()
-        }
-
-        if (!this.db_util.has('line_break').value()) {
-            this.db_util.set('line_break', " ").write()
-        }
-
-        if (!this.db_util.has('current_file_path').value()) {
-            this.db_util.set('current_file_path', "").write()
-        }
-
-        if (!this.db_util.has('bg_color').value()) {
-            this.db_util.set('bg_color', "rgba(0, 0, 0, 0.5)").write()
-        }
-
-        if (!this.db_util.has('txt_color').value()) {
-            this.db_util.set('txt_color', "#fff").write()
-        }
-
-        if (!this.db_util.has('font_size').value()) {
-            this.db_util.set('font_size', "14").write()
-        }
-
-        if (!this.db_util.has('second').value()) {
-            this.db_util.set('second', "5").write()
-        }
-
-        if (!this.db_util.has('auto_page').value()) {
-            this.db_util.set('auto_page', "0").write()
-        }
-
-        if (!this.db_util.has('key_next').value()) {
-            this.db_util.set('key_next', "Alt+2").write()
-        }
-
-        if (!this.db_util.has('key_previous').value()) {
-            this.db_util.set('key_previous', "Alt+1").write()
-        }
-
-        if (!this.db_util.has('key_boss').value()) {
-            this.db_util.set('key_boss', "Alt+3").write()
-        }
-
-        if (!this.db_util.has('key_auto').value()) {
-            this.db_util.set('key_auto', "Alt+P").write()
-        }
-
-        if (!this.db_util.has('errCodeChecked').value()) {
-            this.db_util.set('errCodeChecked', false).write()
-        }
-
-        if (!this.db_util.has('is_mouse').value()) {
-            this.db_util.set('is_mouse', "0").write()
-        }
-
-        if (!this.db_util.has('is_display_page').value()) {
-            this.db_util.set('is_display_page', true).write()
-        }
-
-        // if (!this.db_util.has('is_display_joke').value()) {
-        //     this.db_util.set('is_display_joke', false).write()
-        // }
-
-        if (!this.db_util.has('display_model').value()) {
-            this.db_util.set('display_model', '1').write()
-        }
-
-        if (!this.db_util.has('display_shares_list').value()) {
-            this.db_util.set('display_shares_list', []).write()
-        }
-
-        if (!this.db_util.has('moyu_text').value()) {
-            this.db_util.set('moyu_text', "Hello").write()
-        }
-
-        if (!this.db_util.has('desktop_wh').value()) {
-            this.db_util.set('desktop_wh', "").write()
-        }
-
-        if (!this.db_util.has('desktop_wz').value()) {
-            this.db_util.set('desktop_wz', "").write()
-        }        if (!this.db_util.has('is_ad').value()) {
-            this.db_util.set('is_ad', 0).write()
-        }
-
-        // 涨停告警配置
-        if (!this.db_util.has('limit_up_alert_enabled').value()) {
-            this.db_util.set('limit_up_alert_enabled', false).write()
-        }
-
-        if (!this.db_util.has('dingtalk_webhook').value()) {
-            this.db_util.set('dingtalk_webhook', "").write()
-        }
-
-        if (!this.db_util.has('at_phone_numbers').value()) {
-            this.db_util.set('at_phone_numbers', []).write()
-        }
-
-        let isMac = 'darwin' === process.platform;
-        if (!this.db_util.has('curr_model').value()) {
-            if (isMac) {
-                this.db_util.set('curr_model', "1").write()
-            } else {
-                this.db_util.set('curr_model', "2").write()
-            }
-        }
+        // 确保写入默认值到文件
+        this.db_util.write();
     },
     
     // 创建配置备份
@@ -290,16 +187,16 @@ export default {
     },
     
     // 获取配置值
-    get(key) {
+    async get(key) {
         try {
-            if (!this.initialized && !this.init()) {
+            if (!this.initialized && !await this.init()) {
                 console.warn(`Failed to initialize database when getting '${key}'`);
                 return this.defaultConfig[key]; // 返回默认值
             }
             
             // 如果键存在返回键值，否则返回默认值
-            const value = this.db_util.has(key).value() 
-                ? this.db_util.get(key).value()
+            const value = this.db_util.data[key] !== undefined 
+                ? this.db_util.data[key]
                 : this.defaultConfig[key];
                 
             return value;
@@ -321,13 +218,14 @@ export default {
             console.log(`设置配置项 '${key}':`, value);
             
             // 写入配置并立即刷新到磁盘
-            this.db_util.set(key, value).write();
+            this.db_util.data[key] = value;
+            this.db_util.write();
             
             // 立即创建备份
             this.createBackup();
             
             // 验证写入是否成功
-            const writtenValue = this.db_util.get(key).value();
+            const writtenValue = this.db_util.data[key];
             const success = JSON.stringify(writtenValue) === JSON.stringify(value);
             
             if (success) {
@@ -346,11 +244,12 @@ export default {
             try {
                 this.initialized = false;
                 if (this.init()) {
-                    this.db_util.set(key, value).write();
+                    this.db_util.data[key] = value;
+                    this.db_util.write();
                     this.createBackup();
                     
                     // 再次验证
-                    const writtenValue = this.db_util.get(key).value();
+                    const writtenValue = this.db_util.data[key];
                     const success = JSON.stringify(writtenValue) === JSON.stringify(value);
                     
                     if (success) {
@@ -383,7 +282,7 @@ export default {
             // 批量写入所有配置
             Object.entries(configMap).forEach(([key, value]) => {
                 console.log(`设置配置项 '${key}':`, typeof value === 'object' ? JSON.stringify(value) : value);
-                this.db_util.set(key, value);
+                this.db_util.data[key] = value;
             });
             
             // 统一写入到磁盘
@@ -395,7 +294,7 @@ export default {
             // 验证所有写入是否成功
             let allSuccess = true;
             Object.entries(configMap).forEach(([key, value]) => {
-                const writtenValue = this.db_util.get(key).value();
+                const writtenValue = this.db_util.data[key];
                 const success = JSON.stringify(writtenValue) === JSON.stringify(value);
                 
                 if (success) {
@@ -423,8 +322,9 @@ export default {
             }
             
             Object.entries(this.defaultConfig).forEach(([key, value]) => {
-                this.db_util.set(key, value).write();
+                this.db_util.data[key] = value;
             });
+            this.db_util.write();
             
             return true;
         } catch (err) {
@@ -449,7 +349,7 @@ export default {
             }
             
             // 获取当前配置
-            const config = this.db_util.getState();
+            const config = this.db_util.data;
             
             // 写入到指定文件
             fs.writeFileSync(targetPath, JSON.stringify(config, null, 2), 'utf8');
@@ -476,8 +376,9 @@ export default {
             
             // 将导入的配置应用到数据库
             Object.entries(config).forEach(([key, value]) => {
-                this.db_util.set(key, value).write();
+                this.db_util.data[key] = value;
             });
+            this.db_util.write();
             
             return { success: true, message: '配置导入成功' };
         } catch (err) {
