@@ -48,40 +48,29 @@ function startRenderer () {
       heartbeat: 2500
     })
 
-    compiler.hooks.compilation.tap('compilation', compilation => {
-      compilation.hooks.processAssets.tapAsync('html-webpack-plugin-after-emit', (assets, cb) => {
-        hotMiddleware.publish({ action: 'reload' })
-        cb()
-      })
-    })
-
     compiler.hooks.done.tap('done', stats => {
       logStats('Renderer', stats)
+      hotMiddleware.publish({ action: 'reload' })
     })
 
-    const server = new WebpackDevServer({
-      port: 9080,
+    const server = new WebpackDevServer(compiler, {
+      contentBase: path.join(__dirname, '../dist/electron'),
+      publicPath: '/',
       hot: true,
-      client: {
-        overlay: false
-      },
-      setupMiddlewares(middlewares, devServer) {
-        middlewares.unshift({
-          name: 'webpack-hot-middleware',
-          path: '/__webpack_hmr',
-          middleware: hotMiddleware
-        });
-        return middlewares;
+      quiet: true,
+      overlay: false,
+      before (app) {
+        app.use(hotMiddleware)
       }
-    }, compiler)
+    })
 
-    server.start()
-      .then(() => {
-        resolve()
-      })
-      .catch(err => {
+    server.listen(9080, '127.0.0.1', err => {
+      if (err) {
         reject(err)
-      })
+        return
+      }
+      resolve()
+    })
   })
 }
 

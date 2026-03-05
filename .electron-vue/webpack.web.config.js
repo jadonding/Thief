@@ -59,16 +59,22 @@ let webConfig = {
       },
       {
         test: /\.(png|jpe?g|gif|svg)(\?.*)?$/,
-        type: 'asset/resource',
-        generator: {
-          filename: 'imgs/[name].[ext]'
+        use: {
+          loader: 'url-loader',
+          options: {
+            limit: 10000,
+            name: 'imgs/[name].[ext]'
+          }
         }
       },
       {
         test: /\.(woff2?|eot|ttf|otf)(\?.*)?$/,
-        type: 'asset/resource',
-        generator: {
-          filename: 'fonts/[name].[ext]'
+        use: {
+          loader: 'url-loader',
+          options: {
+            limit: 10000,
+            name: 'fonts/[name].[ext]'
+          }
         }
       }
     ]
@@ -106,8 +112,7 @@ let webConfig = {
   ],
   output: {
     filename: '[name].js',
-    path: path.join(__dirname, '../dist/web'),
-    assetModuleFilename: 'assets/[name].[ext]'
+    path: path.join(__dirname, '../dist/web')
   },
   resolve: {
     alias: {
@@ -138,17 +143,13 @@ if (process.env.NODE_ENV === 'production') {
   }
 
   webConfig.plugins.push(
-    new CopyWebpackPlugin({
-      patterns: [
-        {
-          from: path.join(__dirname, '../static'),
-          to: path.join(__dirname, '../dist/web/static'),
-          globOptions: {
-            ignore: ['.*']
-          }
-        }
-      ]
-    }),
+    new CopyWebpackPlugin([
+      {
+        from: path.join(__dirname, '../static'),
+        to: path.join(__dirname, '../dist/web/static'),
+        ignore: ['.*']
+      }
+    ]),
     new webpack.DefinePlugin({
       'process.env.NODE_ENV': '"production"'
     })
