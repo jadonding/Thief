@@ -15,6 +15,8 @@
     "build:linux32": "node .electron-vue/build.js && electron-builder --linux --ia32",
     "build:mac": "node .electron-vue/build.js && electron-builder --mac --x64",
     "build:mac:arm64": "node .electron-vue/build.js && electron-builder --mac --arm64",
+    "build:mac:universal": "node .electron-vue/build.js && electron-builder --mac --universal",
+    "build:mac:local": "node .electron-vue/build.js && electron-builder --mac --arm64 -c.forceCodeSigning=false -c.mac.identity=- -c.mac.notarize=false",
     "build:all": "node .electron-vue/build.js && electron-builder --platform=all",
     "build:dir": "node .electron-vue/build.js && electron-builder --dir",
     "build:clean": "cross-env BUILD_TARGET=clean node .electron-vue/build.js",
@@ -28,6 +30,7 @@
   "build": {
     "productName": "thief",
     "appId": "c.team.thief",
+    "forceCodeSigning": true,
     "directories": {
       "output": "build"
     },
@@ -50,7 +53,15 @@
       ]
     },
     "mac": {
-      "icon": "build/icons/icon.icns"
+      "icon": "build/icons/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": true,
+      "entitlements": "config/mac/entitlements.mac.plist",
+      "entitlementsInherit": "config/mac/entitlements.mac.inherit.plist",
+      "notarize": true
     },
     "win": {
       "icon": "static/icon.png"
