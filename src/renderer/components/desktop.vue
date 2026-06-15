@@ -207,3 +207,15 @@ export default {
   }
 }
 </style>
+
+<style lang="scss">
+.profit-up,
+.stock-color-red {
+  color: #f56c6c;
+}
+
+.profit-down,
+.stock-color-green {
+  color: #67c23a;
+}
+</style>

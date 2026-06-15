@@ -417,12 +417,223 @@ const stockUtils = {
         return results;
     },
 
-    formatStockQuoteText({ stockName, currPrice, percentage, buy1AmountText, showBuy1Amount }) {
+    parsePositiveNumber(value) {
+        const num = parseFloat(value);
+        return Number.isFinite(num) && num > 0 ? num : null;
+    },
+
+    parseNumber(value) {
+        const num = parseFloat(value);
+        return Number.isFinite(num) ? num : null;
+    },
+
+    escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    },
+
+    formatDateOnly(value) {
+        if (!value) return "";
+        if (value instanceof Date && !Number.isNaN(value.getTime())) {
+            const year = value.getFullYear();
+            const month = String(value.getMonth() + 1).padStart(2, "0");
+            const day = String(value.getDate()).padStart(2, "0");
+            return `${year}-${month}-${day}`;
+        }
+        return String(value).slice(0, 10);
+    },
+
+    isBoughtToday(stockConfig, now) {
+        const buyDate = stockConfig ? this.formatDateOnly(stockConfig.buyDate) : "";
+        const today = this.formatDateOnly(now || new Date());
+        return !buyDate || buyDate === today;
+    },
+
+    normalizeProfitOptions(options) {
+        const source = options || {};
+        return {
+            showStockTodayProfit: source.showStockTodayProfit !== false,
+            showStockHoldingProfit: source.showStockHoldingProfit !== false,
+            showStockProfitLabel: source.showStockProfitLabel !== false,
+            stockProfitSeparator: source.stockProfitSeparator !== undefined ? String(source.stockProfitSeparator) : "/",
+            showStockTotalTodayProfit: source.showStockTotalTodayProfit === true,
+            showStockTotalHoldingProfit: source.showStockTotalHoldingProfit === true,
+            stockColorMode: this.normalizeStockColorMode(source.stockColorMode || source.stock_color_mode)
+        };
+    },
+
+    normalizeStockColorMode(value) {
+        const mode = value || "red_up_green_down";
+        return ["red_up_green_down", "red_down_green_up", "none"].includes(mode) ? mode : "red_up_green_down";
+    },
+
+    getDirectionByValue(value) {
+        const num = this.parseNumber(value);
+        if (num === null || num === 0) return "";
+        return num > 0 ? "up" : "down";
+    },
+
+    getStockDirection({ percentage, currPrice, previousClose, stockConfig }) {
+        const cost = stockConfig ? this.parseNumber(stockConfig.cost) : null;
+        const current = this.parseNumber(currPrice);
+        if (cost !== null && current !== null && current !== cost) {
+            return current > cost ? "up" : "down";
+        }
+
+        const direction = this.getDirectionByValue(percentage);
+        if (direction) return direction;
+
+        const previous = this.parseNumber(previousClose);
+        if (current === null || previous === null || current === previous) return "";
+        return current > previous ? "up" : "down";
+    },
+
+    getColorClassByDirection(direction, stockColorMode) {
+        const mode = this.normalizeStockColorMode(stockColorMode);
+        if (!direction || mode === "none") return "";
+        if (mode === "red_down_green_up") {
+            return direction === "up" ? "stock-color-green" : "stock-color-red";
+        }
+        return direction === "up" ? "stock-color-red" : "stock-color-green";
+    },
+
+    wrapColorText(text, colorClass) {
+        return colorClass ? `<span class="${colorClass}">${text}</span>` : text;
+    },
+
+    formatProfitValue(label, value, showLabel) {
+        const labelText = showLabel ? label + ":" : "";
+        return labelText + this.formatMoney(value);
+    },
+
+    formatMoney(value) {
+        const sign = value > 0 ? "+" : "";
+        return sign + value.toFixed(2);
+    },
+
+    formatProfitSpan(label, value, showLabel, stockColorMode) {
+        const text = this.formatProfitValue(label, value, showLabel);
+        const className = this.getColorClassByDirection(this.getDirectionByValue(value), stockColorMode);
+        return this.wrapColorText(text, className);
+    },
+
+    calculateProfitValues({ currPrice, previousClose, stockConfig, now }) {
+        const current = this.parseNumber(currPrice);
+        const previous = this.parseNumber(previousClose);
+        const cost = stockConfig ? this.parseNumber(stockConfig.cost) : null;
+        const shares = stockConfig ? this.parsePositiveNumber(stockConfig.shares) : null;
+        if (current === null || shares === null) {
+            return {
+                todayProfit: null,
+                holdingProfit: null
+            };
+        }
+        const todayBasePrice = this.isBoughtToday(stockConfig, now) ? cost : previous;
+
+        return {
+            todayProfit: todayBasePrice === null ? null : (current - todayBasePrice) * shares,
+            holdingProfit: cost === null ? null : (current - cost) * shares
+        };
+    },
+
+    formatProfitText({ currPrice, previousClose, stockConfig, profitOptions, now, plain }) {
+        const options = this.normalizeProfitOptions(profitOptions);
+        const values = this.calculateProfitValues({
+            currPrice: currPrice,
+            previousClose: previousClose,
+            stockConfig: stockConfig,
+            now: now
+        });
+        const parts = [];
+
+        if (options.showStockTodayProfit && values.todayProfit !== null) {
+            parts.push(plain
+                ? this.formatProfitValue("当天收益", values.todayProfit, options.showStockProfitLabel)
+                : this.formatProfitSpan("当天收益", values.todayProfit, options.showStockProfitLabel, options.stockColorMode));
+        }
+        if (options.showStockHoldingProfit && values.holdingProfit !== null) {
+            parts.push(plain
+                ? this.formatProfitValue("持有收益", values.holdingProfit, options.showStockProfitLabel)
+                : this.formatProfitSpan("持有收益", values.holdingProfit, options.showStockProfitLabel, options.stockColorMode));
+        }
+
+        return parts.join(this.escapeHtml(options.stockProfitSeparator));
+    },
+
+    formatStockTotalText({ totals, profitOptions }) {
+        const options = this.normalizeProfitOptions(profitOptions);
+        const parts = [];
+
+        if (options.showStockTotalTodayProfit && totals.todayProfit !== null) {
+            parts.push(this.formatProfitSpan("总当天收益", totals.todayProfit, options.showStockProfitLabel, options.stockColorMode));
+        }
+        if (options.showStockTotalHoldingProfit && totals.holdingProfit !== null) {
+            parts.push(this.formatProfitSpan("总持有收益", totals.holdingProfit, options.showStockProfitLabel, options.stockColorMode));
+        }
+
+        if (parts.length === 0) {
+            return "";
+        }
+        return parts.join(this.escapeHtml(options.stockProfitSeparator)) + "\n";
+    },
+
+    addProfitTotals(totals, values) {
+        if (values.todayProfit !== null) {
+            totals.todayProfit = totals.todayProfit === null ? values.todayProfit : totals.todayProfit + values.todayProfit;
+        }
+        if (values.holdingProfit !== null) {
+            totals.holdingProfit = totals.holdingProfit === null ? values.holdingProfit : totals.holdingProfit + values.holdingProfit;
+        }
+    },
+
+    formatLegacyProfitText({ currPrice, stockConfig, now }) {
+        const cost = stockConfig ? this.parsePositiveNumber(stockConfig.cost) : null;
+        const current = this.parsePositiveNumber(currPrice);
+        if (cost === null || current === null) {
+            return "";
+        }
+
+        const profitRate = (current - cost) / cost * 100;
+        const sign = profitRate > 0 ? "+" : "";
+        const className = profitRate >= 0 ? "profit-up" : "profit-down";
+        const label = this.isBoughtToday(stockConfig, now) ? "当天收益" : "持有收益";
+
+        return `<span class="profit ${className}">${label}:${sign}${profitRate.toFixed(2)}%</span>`;
+    },
+
+    formatStockQuoteText({ stockName, currPrice, percentage, previousClose, buy1AmountText, showBuy1Amount, stockConfig, now, profitOptions }) {
+        const options = profitOptions ? this.normalizeProfitOptions(profitOptions) : { stockColorMode: "none" };
         var text = stockName + '  ' + currPrice + "/" + percentage + "%";
         if (showBuy1Amount !== false) {
             text = text + '  ' + buy1AmountText;
         }
-        return text + "\n";
+        const profitText = profitOptions
+            ? this.formatProfitText({
+                currPrice: currPrice,
+                previousClose: previousClose,
+                stockConfig: stockConfig,
+                profitOptions: profitOptions,
+                now: now,
+                plain: true
+            })
+            : this.formatLegacyProfitText({
+                currPrice: currPrice,
+                stockConfig: stockConfig,
+                now: now
+            });
+        if (profitText) {
+            text = text + '  ' + profitText;
+        }
+        return this.wrapColorText(text, this.getColorClassByDirection(this.getStockDirection({
+            percentage: percentage,
+            currPrice: currPrice,
+            previousClose: previousClose,
+            stockConfig: stockConfig
+        }), options.stockColorMode)) + "\n";
     },
 
     getData: function (code, callback, options) {
@@ -481,21 +692,33 @@ const stockUtils = {
         //         console.log(textAll)
         //         callback(textAll.substring(0, textAll.length-3));
         //     });
+        const requestOptions = Object.assign({}, options || {}, {
+            stockConfigs: code
+        });
         that.requestStock(urlAll, function (res) {
             callback(res)
-        }, options)
+        }, requestOptions)
     },
     requestStock(url, func, options) {
         // console.log(url);
         var showBuy1Amount = true;
+        const stockConfigs = options && Array.isArray(options.stockConfigs) ? options.stockConfigs : [];
+        const profitOptions = this.normalizeProfitOptions(options);
         if (options && Object.prototype.hasOwnProperty.call(options, 'showBuy1Amount')) {
             showBuy1Amount = options.showBuy1Amount !== false;
         } else {
             try {
                 const db = require('./db').default;
                 showBuy1Amount = db.get('is_display_buy1_amount') !== false;
+                profitOptions.showStockTodayProfit = db.get('is_display_stock_today_profit') !== false;
+                profitOptions.showStockHoldingProfit = db.get('is_display_stock_holding_profit') !== false;
+                profitOptions.showStockProfitLabel = db.get('is_display_stock_profit_label') !== false;
+                profitOptions.stockProfitSeparator = db.get('stock_profit_separator') || "/";
+                profitOptions.showStockTotalTodayProfit = db.get('is_display_stock_total_today_profit') === true;
+                profitOptions.showStockTotalHoldingProfit = db.get('is_display_stock_total_holding_profit') === true;
+                profitOptions.stockColorMode = stockUtils.normalizeStockColorMode(db.get('stock_color_mode'));
             } catch (err) {
-                console.error('读取买一金额显示配置失败:', err && err.message ? err.message : err);
+                console.error('读取股票显示配置失败:', err && err.message ? err.message : err);
             }
         }
 
@@ -507,6 +730,10 @@ const stockUtils = {
                 let results = res.text;
                 const resultsArray = results.split(";");
                 var textAll = "";
+                var totals = {
+                    todayProfit: null,
+                    holdingProfit: null
+                };
                 for (let i = 0; i < resultsArray.length - 1; i++) {
 
                     let result = resultsArray[i];
@@ -515,6 +742,7 @@ const stockUtils = {
                     var stockName = arr[1];
                     var stockCode = arr[2];
                     var currPrice = arr[3];
+                    var previousClose = arr[4];
                     var percentage = arr[32];
                     var priceBuyer1 = arr[9];
                     var amountBuyer1 = arr[10];
@@ -546,12 +774,26 @@ const stockUtils = {
                         stockName: stockName,
                         currPrice: currPrice,
                         percentage: percentage,
+                        previousClose: previousClose,
                         buy1AmountText: param.value + param.unit,
-                        showBuy1Amount: showBuy1Amount
+                        showBuy1Amount: showBuy1Amount,
+                        stockConfig: stockConfigs[i],
+                        profitOptions: profitOptions,
+                        now: options && options.now
                     });
+                    stockUtils.addProfitTotals(totals, stockUtils.calculateProfitValues({
+                        currPrice: currPrice,
+                        previousClose: previousClose,
+                        stockConfig: stockConfigs[i],
+                        now: options && options.now
+                    }));
                     textAll = textAll + text;
                     // console.log(textAll);
                 }
+                textAll = textAll + stockUtils.formatStockTotalText({
+                    totals: totals,
+                    profitOptions: profitOptions
+                });
                 func(textAll)
             }).catch((err) => {
             console.error('请求股票行情失败:', err && err.message ? err.message : err);
