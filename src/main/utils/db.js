@@ -22,6 +22,7 @@ const defaultConfig = {
   errCodeChecked: false,
   is_mouse: '0',
   is_display_page: true,
+  is_display_buy1_amount: true,
   display_model: '1',
   display_shares_list: [],
   moyu_text: 'Hello',

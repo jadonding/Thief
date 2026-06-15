@@ -179,6 +179,9 @@
           <el-form-item label="显示分页">
             <el-switch v-model="is_display_page"></el-switch>
           </el-form-item>
+          <el-form-item label="买一金额">
+            <el-switch v-model="is_display_buy1_amount"></el-switch>
+          </el-form-item>
           <el-form-item label="摸鱼文字">
             <el-input style="width:130px;" v-model="moyu_text" maxlength="100" size="mini" placeholder="请输入摸鱼文字"
               prefix-icon="el-icon-umbrella"></el-input>
@@ -268,6 +271,7 @@ export default {
         key_type: 0
       },
       is_display_page: true,
+      is_display_buy1_amount: true,
       is_display_joke: false,
       is_display_shares: false,
       stock_code: [], // 存储 { code: string, name: string }
@@ -540,6 +544,7 @@ export default {
       this.lmchecked = db.get("errCodeChecked");
 
       this.is_display_page = db.get("is_display_page");
+      this.is_display_buy1_amount = db.get("is_display_buy1_amount") !== false;
 
       const savedStocks = db.get("display_shares_list") || [];
       this.stock_code = savedStocks.map(stock => ({
@@ -592,6 +597,7 @@ export default {
         "key_auto": this.keyAuto + "+" + this.keyAutoX,
         "errCodeChecked": this.form.errCodeChecked,
         "is_display_page": this.is_display_page,
+        "is_display_buy1_amount": this.is_display_buy1_amount,
         "display_shares_list": stockList, // 使用清理后的股票数据
         "moyu_text": this.moyu_text,
         "limit_up_alert_enabled": this.limit_up_alert_enabled,
