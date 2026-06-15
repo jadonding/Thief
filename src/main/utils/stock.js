@@ -417,7 +417,15 @@ const stockUtils = {
         return results;
     },
 
-    getData: function (code, callback) {
+    formatStockQuoteText({ stockName, currPrice, percentage, buy1AmountText, showBuy1Amount }) {
+        var text = stockName + '  ' + currPrice + "/" + percentage + "%";
+        if (showBuy1Amount !== false) {
+            text = text + '  ' + buy1AmountText;
+        }
+        return text + "\n";
+    },
+
+    getData: function (code, callback, options) {
         // var codeArr = code.split(",");
         var that = this;
         // var textAll = "";
@@ -475,10 +483,22 @@ const stockUtils = {
         //     });
         that.requestStock(urlAll, function (res) {
             callback(res)
-        })
+        }, options)
     },
-    requestStock(url, func) {
+    requestStock(url, func, options) {
         // console.log(url);
+        var showBuy1Amount = true;
+        if (options && Object.prototype.hasOwnProperty.call(options, 'showBuy1Amount')) {
+            showBuy1Amount = options.showBuy1Amount !== false;
+        } else {
+            try {
+                const db = require('./db').default;
+                showBuy1Amount = db.get('is_display_buy1_amount') !== false;
+            } catch (err) {
+                console.error('读取买一金额显示配置失败:', err && err.message ? err.message : err);
+            }
+        }
+
         request
             .get(url)
             .buffer(true)
@@ -522,7 +542,13 @@ const stockUtils = {
                         sealAmountInWan = parseFloat(param.value) / 10000;
                     }
 
-                    var text = stockName + '  ' + currPrice + "/" + percentage + "%" + '  '+ param.value + param.unit + "\n";
+                    var text = stockUtils.formatStockQuoteText({
+                        stockName: stockName,
+                        currPrice: currPrice,
+                        percentage: percentage,
+                        buy1AmountText: param.value + param.unit,
+                        showBuy1Amount: showBuy1Amount
+                    });
                     textAll = textAll + text;
                     // console.log(textAll);
                 }
