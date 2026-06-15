@@ -99,7 +99,7 @@ export default {
                 } catch (err) {
                     console.error("解析股票数据回调异常:", err);
                 }
-            });
+            }, { showBuy1Amount: true });
         } catch (error) {
             console.error("检查股票数据时出错:", error);
         }
