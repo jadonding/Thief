@@ -289,6 +289,29 @@ assert.strictEqual(
       '<span class="stock-color-red">总当天收益:+150.00</span>/<span class="stock-color-red">总持有收益:+150.00</span>\n'
   );
 
+  const summaryOnlyText = await getStockData(
+    stockUtilsWithTwoQuotes,
+    [
+      { code: '000821', name: 'ST京机', cost: '10', shares: '100' },
+      { code: '002805', name: '丰元股份', cost: '5', shares: '200' }
+    ],
+    {
+      showBuy1Amount: false,
+      showStockItemData: false,
+      showStockTodayProfit: false,
+      showStockHoldingProfit: true,
+      showStockTotalTodayProfit: true,
+      showStockTotalHoldingProfit: true,
+      stockProfitSeparator: '/',
+      now: new Date('2026-06-15T10:00:00+08:00')
+    }
+  );
+
+  assert.strictEqual(
+    summaryOnlyText,
+    '<span class="stock-color-red">总当天收益:+150.00</span>/<span class="stock-color-red">总持有收益:+150.00</span>\n'
+  );
+
   console.log('stock format tests passed');
 })().catch(error => {
   console.error(error);

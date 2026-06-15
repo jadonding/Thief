@@ -23,6 +23,7 @@ const defaultConfig = {
   is_mouse: '0',
   is_display_page: true,
   is_display_buy1_amount: true,
+  is_display_stock_item_data: true,
   is_display_stock_today_profit: true,
   is_display_stock_holding_profit: true,
   is_display_stock_profit_label: true,

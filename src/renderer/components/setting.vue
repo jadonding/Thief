@@ -62,6 +62,9 @@
           <el-form-item label="买一金额">
             <el-switch v-model="is_display_buy1_amount"></el-switch>
           </el-form-item>
+          <el-form-item label="个股数据">
+            <el-switch v-model="is_display_stock_item_data"></el-switch>
+          </el-form-item>
           <el-form-item label="颜色模式">
             <el-select v-model="stock_color_mode" size="mini" class="compact-input">
               <el-option label="红涨绿跌" value="red_up_green_down"></el-option>
@@ -248,6 +251,7 @@ export default {
       },
       is_display_page: true,
       is_display_buy1_amount: true,
+      is_display_stock_item_data: true,
       is_display_stock_today_profit: true,
       is_display_stock_holding_profit: true,
       is_display_stock_profit_label: true,
@@ -532,6 +536,7 @@ export default {
 
       this.is_display_page = db.get("is_display_page");
       this.is_display_buy1_amount = db.get("is_display_buy1_amount") !== false;
+      this.is_display_stock_item_data = db.get("is_display_stock_item_data") !== false;
       this.is_display_stock_today_profit = db.get("is_display_stock_today_profit") !== false;
       this.is_display_stock_holding_profit = db.get("is_display_stock_holding_profit") !== false;
       this.is_display_stock_profit_label = db.get("is_display_stock_profit_label") !== false;
@@ -603,6 +608,7 @@ export default {
         "errCodeChecked": this.form.errCodeChecked,
         "is_display_page": this.is_display_page,
         "is_display_buy1_amount": this.is_display_buy1_amount,
+        "is_display_stock_item_data": this.is_display_stock_item_data,
         "is_display_stock_today_profit": this.is_display_stock_today_profit,
         "is_display_stock_holding_profit": this.is_display_stock_holding_profit,
         "is_display_stock_profit_label": this.is_display_stock_profit_label,

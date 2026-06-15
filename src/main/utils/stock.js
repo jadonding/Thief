@@ -459,6 +459,7 @@ const stockUtils = {
             showStockTodayProfit: source.showStockTodayProfit !== false,
             showStockHoldingProfit: source.showStockHoldingProfit !== false,
             showStockProfitLabel: source.showStockProfitLabel !== false,
+            showStockItemData: source.showStockItemData !== false,
             stockProfitSeparator: source.stockProfitSeparator !== undefined ? String(source.stockProfitSeparator) : "/",
             showStockTotalTodayProfit: source.showStockTotalTodayProfit === true,
             showStockTotalHoldingProfit: source.showStockTotalHoldingProfit === true,
@@ -710,6 +711,7 @@ const stockUtils = {
             try {
                 const db = require('./db').default;
                 showBuy1Amount = db.get('is_display_buy1_amount') !== false;
+                profitOptions.showStockItemData = db.get('is_display_stock_item_data') !== false;
                 profitOptions.showStockTodayProfit = db.get('is_display_stock_today_profit') !== false;
                 profitOptions.showStockHoldingProfit = db.get('is_display_stock_holding_profit') !== false;
                 profitOptions.showStockProfitLabel = db.get('is_display_stock_profit_label') !== false;
@@ -787,7 +789,9 @@ const stockUtils = {
                         stockConfig: stockConfigs[i],
                         now: options && options.now
                     }));
-                    textAll = textAll + text;
+                    if (profitOptions.showStockItemData) {
+                        textAll = textAll + text;
+                    }
                     // console.log(textAll);
                 }
                 textAll = textAll + stockUtils.formatStockTotalText({
