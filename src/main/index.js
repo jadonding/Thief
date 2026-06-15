@@ -8,6 +8,7 @@ import osUtil from './utils/osUtil'
 import stock from './utils/stock'
 import ad from './utils/ad'
 import stockMonitor from './utils/stockMonitor'
+import { stripDisplayHtml, formatTrayTitle } from './utils/displayText'
 import axios from 'axios'
 const remoteMain = require('@electron/remote/main')
 
@@ -184,11 +185,7 @@ function setTrayTitleSafe(title = '') {
         return
     }
     try {
-        const singleLineTitle = String(title)
-            .replace(/\r?\n|\r/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim()
-        tray.setTitle(singleLineTitle)
+        tray.setTitle(formatTrayTitle(title))
     } catch (_) {}
 }
 
@@ -654,17 +651,30 @@ let autoStockTime;
 async function AutoStock() {
     // debugger;
     let display_model = await db.get('display_model');
-    let display_shares_list = await db.get('display_shares_list');
 
     if (display_model === '2') {
         clearInterval(autoStockTime);
         autoStockTime = setInterval(function() {
+            const display_shares_list = db.get('display_shares_list');
             stock.getData(display_shares_list, function(text) {
                 updateText(text);
             })
         }, 500);
     } else {
         clearInterval(autoStockTime);
+    }
+}
+
+async function refreshCurrentDisplay() {
+    const display_model = await db.get('display_model');
+    if (display_model === '2') {
+        const display_shares_list = await db.get('display_shares_list');
+        stock.getData(display_shares_list, function(text) {
+            updateText(text);
+            AutoStock();
+        });
+    } else {
+        BossKey(1);
     }
 }
 
@@ -686,7 +696,7 @@ async function updateText(text) {
             desktopBarWindow.webContents.send('text', 'ping');
         }
 
-        touchBarText.label = text;
+        touchBarText.label = stripDisplayHtml(text);
     }
 }
 
@@ -975,7 +985,7 @@ async function createKey() {
     })
 }
 
-async function createTray() {
+async function createTray(refreshDisplay = true) {
     if (tray) {
         try {
             tray.destroy()
@@ -1107,12 +1117,7 @@ async function createTray() {
         checked: (await db.get('display_model')) === '2',
         click: async () => {
             db.set("display_model", "2");
-            let display_shares_list = await db.get('display_shares_list');
-
-            stock.getData(display_shares_list, function(text) {
-                updateText(text);
-                AutoStock();
-            })
+            refreshCurrentDisplay();
         }
     }, {
         type: "separator"
@@ -1244,7 +1249,9 @@ async function createTray() {
     } catch (error) {
         console.error('Failed to build tray menu template:', error)
     }
-    BossKey();
+    if (refreshDisplay) {
+        BossKey();
+    }
 }
 
 function createSetting() {
@@ -1274,7 +1281,7 @@ ipcMain.on('bg_text_color', async function() {
         tray = null
     }
     await createKey();
-    await createTray();
+    await createTray(false);
 
     // 重新启动或停止股票监控
     if (await db.get("limit_up_alert_enabled")) {
@@ -1296,6 +1303,8 @@ ipcMain.on('bg_text_color', async function() {
     } else {
         console.log('desktopBarWindow为null，无法发送消息');
     }
+
+    await refreshCurrentDisplay();
 })
 
 ipcMain.on('jump_page', function() {
@@ -1438,6 +1447,11 @@ ipcMain.on('update_stock_monitor', (event, enabled) => {
     
     // 使用重启方法来确保配置更新
     stockMonitor.restartMonitoring();
+});
+
+ipcMain.on('refresh_current_display', () => {
+    console.log('刷新当前显示内容');
+    refreshCurrentDisplay();
 });
 
 // 处理股票数据刷新
