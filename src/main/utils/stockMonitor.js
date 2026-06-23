@@ -2,6 +2,7 @@
 import stockUtils from './stock';
 import dingtalkUtils from './dingtalk';
 import db from './db';
+import { stripDisplayHtml } from './displayText';
 
 export default {
     monitorInterval: null,
@@ -99,7 +100,14 @@ export default {
                 } catch (err) {
                     console.error("解析股票数据回调异常:", err);
                 }
-            }, { showBuy1Amount: true });
+            }, {
+                showBuy1Amount: true,
+                showStockTodayProfit: false,
+                showStockHoldingProfit: false,
+                showStockTotalTodayProfit: false,
+                showStockTotalHoldingProfit: false,
+                stockColorMode: 'none'
+            });
         } catch (error) {
             console.error("检查股票数据时出错:", error);
         }
@@ -141,13 +149,17 @@ export default {
     parseStockLine(line, stockCode) {
         try {
             // 解析格式: "股票名称  价格/涨幅%  封单金额单位"
-            const parts = line.trim().split(/\s+/);
+            const plainLine = stripDisplayHtml(line).trim();
+            const parts = plainLine.split(/\s+/);
             if (parts.length < 3) {
                 return null;
             }
 
             const name = parts[0];
             const priceAndPercentage = parts[1].split('/');
+            if (priceAndPercentage.length < 2) {
+                return null;
+            }
             const sealAmountText = parts[2];
 
             const price = parseFloat(priceAndPercentage[0]);
