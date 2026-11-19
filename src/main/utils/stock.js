@@ -279,11 +279,14 @@ const stockUtils = {
 
     // 使用迈瑞API获取全A股股票数据
     async fetchAllStockCodesFromMairui() {
+        const license = (process.env.MAIRUI_API_LICENSE || '').trim();
+        if (!license) return 0;
+
         console.log('开始从迈瑞API获取股票数据...');
         
         try {
             const response = await request
-                .get('https://api.mairuiapi.com/hslt/list/[redacted]')
+                .get(`https://api.mairuiapi.com/hslt/list/${encodeURIComponent(license)}`)
                 .timeout(30000)
                 .buffer(true)
                 .parse(request.parse.text); // 禁用自动JSON解析，作为文本处理
@@ -295,7 +298,7 @@ const stockUtils = {
                     stockData = JSON.parse(response.text);
                     console.log(`从迈瑞API成功解析JSON，获取到 ${stockData.length} 条股票数据`);
                 } catch (parseError) {
-                    console.warn('JSON解析失败，尝试修复数据:', parseError.message);
+                    console.warn('JSON解析失败，尝试修复数据');
                     console.log('原始响应长度:', response.text.length);
                     
                     // 尝试修复被截断的JSON
@@ -313,7 +316,7 @@ const stockUtils = {
                                 stockData = JSON.parse(fixedText);
                                 console.log(`修复后成功解析JSON，获取到 ${stockData.length} 条股票数据`);
                             } catch (fixError) {
-                                console.error('修复后仍无法解析:', fixError.message);
+                                console.error('修复后仍无法解析');
                                 return 0;
                             }
                         } else {
@@ -360,8 +363,8 @@ const stockUtils = {
                 console.error('迈瑞API返回数据格式不正确');
                 return 0;
             }
-        } catch (error) {
-            console.error('迈瑞API获取失败:', error);
+        } catch (_) {
+            console.error('迈瑞API请求失败');
             return 0;
         }
     },

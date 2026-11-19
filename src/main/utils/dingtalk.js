@@ -34,11 +34,10 @@ export default {
                 .send(message)
                 .timeout(10000);
             
-            console.log("钉钉消息发送成功:", response.body);
+            console.log("钉钉消息请求已完成");
             return response.body;
-        } catch (error) {
-            console.error("钉钉消息发送失败:", error);
-            throw error;
+        } catch (_) {
+            throw new Error("钉钉消息请求失败");
         }
     },
 

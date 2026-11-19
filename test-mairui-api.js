@@ -1,11 +1,16 @@
-const request = require('superagent');
-
 async function testMairuiAPI() {
+    const license = (process.env.MAIRUI_API_LICENSE || '').trim();
+    if (!license) {
+        console.error('请设置 MAIRUI_API_LICENSE');
+        process.exitCode = 1;
+        return;
+    }
+    const request = require('superagent');
     console.log('测试迈瑞API...');
     
     try {
         const response = await request
-            .get('https://api.mairuiapi.com/hslt/list/[redacted]')
+            .get(`https://api.mairuiapi.com/hslt/list/${encodeURIComponent(license)}`)
             .timeout(30000)
             .buffer(true)
             .parse(request.parse.text); // 禁用自动JSON解析
@@ -13,8 +18,6 @@ async function testMairuiAPI() {
         console.log('响应状态:', response.status);
         console.log('响应类型:', response.type);
         console.log('响应数据长度:', response.text ? response.text.length : 0);
-        console.log('响应数据前200字符:', response.text ? response.text.substring(0, 200) : 'No text');
-        console.log('响应数据后100字符:', response.text ? response.text.substring(response.text.length - 100) : 'No text');
         
         let stockData = null;
         
@@ -22,9 +25,8 @@ async function testMairuiAPI() {
             try {
                 stockData = JSON.parse(response.text);
                 console.log('JSON解析成功，数据条数:', stockData.length);
-                console.log('前3条数据:', stockData.slice(0, 3));
             } catch (parseError) {
-                console.warn('JSON解析失败:', parseError.message);
+                console.warn('JSON解析失败');
                 
                 // 尝试修复被截断的JSON
                 let fixedText = response.text;
@@ -36,18 +38,17 @@ async function testMairuiAPI() {
                         try {
                             stockData = JSON.parse(fixedText);
                             console.log('修复后JSON解析成功，数据条数:', stockData.length);
-                            console.log('前3条数据:', stockData.slice(0, 3));
-                            console.log('后3条数据:', stockData.slice(-3));
                         } catch (fixError) {
-                            console.error('修复后仍无法解析:', fixError.message);
+                            console.error('修复后仍无法解析');
                         }
                     }
                 }
             }
         }
         
-    } catch (error) {
-        console.error('API请求失败:', error.message);
+    } catch (_) {
+        console.error('API请求失败');
+        process.exitCode = 1;
     }
 }
 
